@@ -1,0 +1,72 @@
+[project]
+name = "mcp-vacuum"
+version = "0.1.0"
+description = "AI agent for discovering and integrating MCP Servers with Kagent"
+authors = [
+    {name = "Tyler Zervas", email = "tz-dev@vectorweight.com"},
+]
+dependencies = [
+    "google-adk",  # Google Python Agent Developer Kit
+    "cryptography>=42.0.0",  # For secure credential storage
+    "pydantic>=2.5.0",  # For schema validation and serialization
+    "aiohttp>=3.9.0",  # For async HTTP communications
+    "netifaces>=0.11.0",  # For network interface discovery
+    "structlog>=24.1.0",  # For structured logging
+    "python-jose[cryptography]>=3.3.0",  # For JWT handling
+]
+requires-python = ">=3.12"
+readme = "README.md"
+license = {file = "LICENSE"}
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "black>=24.1.0",
+    "ruff>=0.2.0",
+    "mypy>=1.8.0",
+    "bandit>=1.7.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/tzervas/mcp-vacuum"
+Repository = "https://github.com/tzervas/mcp-vacuum.git"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+select = ["E", "F", "B", "I", "S", "W", "N", "UP", "PL", "PTH", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q --cov=mcp_vacuum --cov-report=term-missing"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["mcp_vacuum"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
