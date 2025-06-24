@@ -1,0 +1,36 @@
+{
+    "name": "MCP Vacuum Development",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": "..",
+        "args": {
+            "USER_UID": "${localEnv:UID}",
+            "USER_GID": "${localEnv:GID}"
+        }
+    },
+    "mounts": [
+        "source=/run/user/1000/keyring,target=/run/user/1000/keyring,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.local/share/keyrings,target=/home/developer/.local/share/keyrings,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.gnupg,target=/home/developer/.gnupg,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.gitconfig-warp-ai,target=/home/developer/.gitconfig,type=bind,consistency=cached"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-python.black-formatter",
+                "charliermarsh.ruff",
+                "matangover.mypy"
+            ]
+        }
+    },
+    "postCreateCommand": "sudo chown -R developer:developer /home/developer/.gnupg && chmod 700 /home/developer/.gnupg && chmod 600 /home/developer/.gnupg/* || true && uv pip install -e '.[dev]' && ./.devcontainer/verify-setup.sh",
+    "remoteUser": "developer",
+    "features": {
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    },
+    "containerEnv": {
+        "GPG_TTY": "/dev/pts/0"
+    }
+}

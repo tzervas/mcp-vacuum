@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  mcp-vacuum:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USER_UID: ${UID:-1000}
+        USER_GID: ${GID:-1000}
+    volumes:
+      # Project volume for live development
+      - .:/home/warp/project:rw
+      # Authentication volumes from base image
+      - ${HOME}/.gitconfig:/home/warp/.gitconfig:ro
+      # Secret-tool socket and keyring
+      - /run/user/${UID:-1000}/keyring:/run/user/${UID:-1000}/keyring:rw
+      - ${HOME}/.local/share/keyrings:/home/warp/.local/share/keyrings:rw
+    environment:
+      # Base authentication
+      - AUTH_METHOD=${AUTH_METHOD:-keyring}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GPG_KEY=${GPG_KEY}
+      - GPG_KEY_ID=${GPG_KEY_ID}
+      - GPG_KEY_EMAIL=${GPG_KEY_EMAIL}
+      # Project specific
+      - PROJECT_PATH=/home/warp/project
+      - PYTHONPATH=/home/warp/project/src
+    init: true
+    tty: true
+    stdin_open: true
+    # Network access for MCP server discovery
+    network_mode: host
+    # Security capabilities for network scanning
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    command: ["bash"]
