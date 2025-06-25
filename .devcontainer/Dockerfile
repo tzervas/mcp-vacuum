@@ -1,25 +1,13 @@
 FROM python:3.12-slim-bookworm
 
-# Install system dependencies
+# Install minimal system dependencies and UV package manager
 RUN apt-get update && apt-get install -y \
     git \
     curl \
-    gpg \
-    gnupg2 \
-    sudo \
-    libsecret-tools \\
-    && rm -rf /var/lib/apt/lists/*
-
-# Install UV
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install GitHub CLI
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-    && apt-get update \
-    && apt-get install -y gh \
-    && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Set Python environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -33,10 +21,8 @@ ARG USER_GID=$USER_UID
 
 RUN groupadd --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
-    && apt-get update \
-    && apt-get install -y sudo \
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME
+    && mkdir -p /workspaces/mcp-vacuum \
+    && chown -R $USERNAME:$USERNAME /workspaces/mcp-vacuum
 
 USER $USERNAME
 
