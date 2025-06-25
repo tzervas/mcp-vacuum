@@ -2,17 +2,11 @@
     "name": "MCP Vacuum Development",
     "build": {
         "dockerfile": "Dockerfile",
-        "context": "..",
-        "args": {
-            "USER_UID": "${localEnv:UID}",
-            "USER_GID": "${localEnv:GID}"
-        }
+        "context": ".."
     },
     "mounts": [
-        "source=/run/user/1000/keyring,target=/run/user/1000/keyring,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.local/share/keyrings,target=/home/developer/.local/share/keyrings,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.gnupg,target=/home/developer/.gnupg,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.gitconfig-warp-ai,target=/home/developer/.gitconfig,type=bind,consistency=cached"
+        "source=${localEnv:HOME}/.cache/pip,target=/home/developer/.cache/pip,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.cache/uv,target=/home/developer/.cache/uv,type=bind,consistency=cached"
     ],
     "customizations": {
         "vscode": {
@@ -22,15 +16,24 @@
                 "ms-python.black-formatter",
                 "charliermarsh.ruff",
                 "matangover.mypy"
-            ]
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "python.testing.pytestEnabled": true,
+                "python.testing.unittestEnabled": false,
+                "python.testing.nosetestsEnabled": false,
+                "python.formatting.provider": "black",
+                "editor.formatOnSave": true,
+                "editor.codeActionsOnSave": {
+                    "source.organizeImports": true
+                },
+                "[python]": {
+                    "editor.formatOnSave": true,
+                    "editor.defaultFormatter": "ms-python.black-formatter"
+                }
+            }
         }
     },
-    "postCreateCommand": "sudo chown -R developer:developer /home/developer/.gnupg && chmod 700 /home/developer/.gnupg && chmod 600 /home/developer/.gnupg/* || true && uv pip install -e '.[dev]' && ./.devcontainer/verify-setup.sh",
-    "remoteUser": "developer",
-    "features": {
-        "ghcr.io/devcontainers/features/github-cli:1": {}
-    },
-    "containerEnv": {
-        "GPG_TTY": "/dev/pts/0"
-    }
+    "postCreateCommand": "uv pip install -e '.[dev]' && python -m pytest tests/",
+    "remoteUser": "developer"
 }
