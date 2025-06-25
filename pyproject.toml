@@ -13,6 +13,7 @@ dependencies = [
     "netifaces>=0.11.0",  # For network interface discovery
     "structlog>=24.1.0",  # For structured logging
     "python-jose[cryptography]>=3.3.0",  # For JWT handling
+    "click>=8.1.0",  # For CLI interface
 ]
 requires-python = ">=3.12"
 readme = "README.md"
@@ -32,6 +33,9 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/tzervas/mcp-vacuum"
 Repository = "https://github.com/tzervas/mcp-vacuum.git"
+
+[project.scripts]
+mcp-vacuum = "mcp_vacuum.__main__:cli"
 
 [build-system]
 requires = ["hatchling"]
