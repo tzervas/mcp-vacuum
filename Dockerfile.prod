@@ -1,0 +1,84 @@
+# ---- Builder Stage ----
+FROM python:3.12-slim-bookworm AS builder
+
+LABEL stage="builder"
+
+# Install uv globally in the builder stage
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
+
+ENV UV_HOME="/opt/uv"
+ENV PATH="${UV_HOME}/bin:${PATH}"
+
+WORKDIR /app
+
+# Copy project files
+COPY pyproject.toml uv.lock* README.md LICENSE ./
+# uv.lock might not exist yet, add '*' to make it optional if `uv lock` hasn't been run.
+# If uv.lock is strictly required, remove '*' and ensure it's generated before build.
+
+COPY src/ ./src/
+
+# Install production dependencies using uv into a virtual environment
+# This venv will be copied to the final stage.
+RUN uv venv /opt/venv --python 3.12 \
+    # Create venv
+    && uv venv /opt/venv --python 3.12 \
+    # Activate venv for subsequent commands in this RUN instruction
+    && . /opt/venv/bin/activate \
+    # Install the project and its production dependencies into the venv
+    # `uv pip install .` will install dependencies listed in `[project.dependencies]`
+    # and the `mcp_vacuum` package itself (from src/mcp_vacuum) into the venv.
+    # It will not install `[project.optional-dependencies].dev` by default.
+    && uv pip install --no-cache-dir .
+
+# ---- Final Stage ----
+FROM python:3.12-slim-bookworm AS final
+
+LABEL stage="production"
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    # Set by builder: VIRTUAL_ENV=/opt/venv
+    # Set by final: PATH="/opt/venv/bin:$PATH"
+    PATH="/opt/venv/bin:${PATH}" \
+    # Set default config load path if applicable, or rely on env vars for config
+    # MCP_VACUUM_CONFIG_FILE=/app/config/production.json
+
+# Create a non-root user and group
+ARG UID=1001
+ARG GID=1001
+RUN groupadd --gid ${GID} mcpvacuum && \
+    useradd --uid ${UID} --gid mcpvacuum --shell /bin/bash --create-home mcpvacuum
+
+WORKDIR /app
+
+# Copy virtual environment from builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Application code (src/mcp_vacuum) is installed into /opt/venv/lib/pythonX.Y/site-packages by `uv pip install .`
+# No need to copy src/ separately to /app/src in the final image if using the venv's Python.
+# If there were other application assets (e.g. config templates, static files not part of the Python package),
+# they would be copied here from the builder stage:
+# COPY --from=builder --chown=mcpvacuum:mcpvacuum /app/my_assets ./my_assets
+
+# Ensure /app is writable by the user if needed for logs/cache, or use a dedicated volume
+# RUN mkdir -p /app/logs /app/cache && chown -R mcpvacuum:mcpvacuum /app/logs /app/cache
+# For now, assume logs go to stdout and cache is not filesystem based or handled by volumes.
+
+USER mcpvacuum
+
+# Entrypoint or CMD
+# The project uses `click` and has a CLI entrypoint `mcp-vacuum` via pyproject.toml `[project.scripts]`
+# This script will be in /opt/venv/bin/mcp-vacuum
+ENTRYPOINT ["/opt/venv/bin/mcp-vacuum"]
+
+# Default command (e.g., to run discovery or start an agent service loop if it becomes one)
+# For now, let's make it show help. Users will override CMD.
+CMD ["--help"]
+
+# Example: CMD ["discover", "--networks", "192.168.1.0/24"]
+# Example for a long-running agent: CMD ["run-orchestrator"] (if such a command is added)
