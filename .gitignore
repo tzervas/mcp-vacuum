@@ -71,4 +71,4 @@ secrets/
 .env.local
 
 # ignore internal docs
-docs/*.pdf
+# docs/*.pdf
