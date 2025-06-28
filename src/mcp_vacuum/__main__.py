@@ -40,12 +40,16 @@ def cli(ctx: click.Context, config_file: Optional[str], log_level: Optional[str]
     """MCP Vacuum - Discovers MCP servers, authenticates, and converts schemas."""
     try:
         if config_file:
+            # Load from specified file only
             cfg = Config.from_file(Path(config_file))
         else:
-            # from_env will also pick up MCP_VACUUM_CONFIG_FILE if set and config_file option was not used
-            cfg = Config.from_env()
+            # Load from environment variables (and .env file if present)
+            cfg = Config()
     except Exception as e:
+        import traceback
         click.echo(f"Error loading configuration: {e}", err=True)
+        # Print traceback to stderr for more detailed debugging info
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
     
     # Override from CLI options if provided

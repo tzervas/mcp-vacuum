@@ -89,19 +89,30 @@ class BaseMCPClient(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def _send_request_raw(self, request_payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _send_request_raw(self, request_payload: Dict[str, Any], is_idempotent: bool) -> Dict[str, Any]:
         """
         Sends a raw JSONRPC request payload and returns the raw JSONRPC response.
         This is the core method that transport-specific clients must implement.
         It should handle serialization, deserialization, and transport-level communication.
         It should also raise MCPTimeoutError on transport timeouts.
+        Args:
+            request_payload: The JSON-RPC request payload.
+            is_idempotent: Whether the operation is idempotent. This can influence retry behavior
+                           at the transport layer if it has its own retries, though the primary
+                           retry logic here uses this flag.
         """
         pass
 
-    async def send_request(self, method: str, params: Optional[Dict[str, Any]] = None, request_id: Optional[Union[str, int]] = None) -> Any:
+    async def send_request(self, method: str, params: Optional[Dict[str, Any]] = None, request_id: Optional[Union[str, int]] = None, is_idempotent: bool = True) -> Any:
         """
         Constructs a JSONRPC request, sends it, and processes the response.
-        Handles retries and JSONRPC error checking.
+        Handles retries (if applicable) and JSONRPC error checking.
+        Args:
+            method: The JSON-RPC method name.
+            params: Optional parameters for the method.
+            request_id: Optional custom request ID.
+            is_idempotent: Whether the operation is idempotent. Non-idempotent operations
+                           will not be retried by this client's retry logic.
         """
         if not await self.is_connected() and not self.service_record.transport_type == "http": # HTTP is often connectionless per request
             # Attempt to reconnect or raise error, depending on strategy
@@ -123,11 +134,9 @@ class BaseMCPClient(abc.ABC):
 
                 response_payload: Dict[str, Any]
                 if self._circuit_breaker:
-                    # Wrap the raw send with circuit breaker
-                    response_payload = await self._circuit_breaker.call(self._send_request_raw, req_payload)
+                    response_payload = await self._circuit_breaker.call(self._send_request_raw, req_payload, is_idempotent)
                 else:
-                    # Call directly if circuit breaker is disabled
-                    response_payload = await self._send_request_raw(req_payload)
+                    response_payload = await self._send_request_raw(req_payload, is_idempotent)
 
                 log_attempt.debug("Received raw response payload.", response_id=response_payload.get("id"), result_present="result" in response_payload, error_present="error" in response_payload)
 
@@ -163,17 +172,16 @@ class BaseMCPClient(abc.ABC):
                 # These are errors that the circuit breaker will count as failures if it wraps _send_request_raw.
                 # The retry loop here provides an additional layer of retries if the CB is CLOSED/HALF_OPEN.
                 last_exception = e
-                if attempt < max_attempts - 1:
+                if is_idempotent and attempt < max_attempts - 1: # Only retry if idempotent
                     backoff_time = min(initial_backoff * (2 ** attempt) + random.uniform(0, 0.1 * initial_backoff), max_backoff)
                     log_attempt.warning(f"Connection error encountered. Retrying in {backoff_time:.2f}s...", error_message=str(e), error_type=type(e).__name__)
                     await asyncio.sleep(backoff_time)
                 else:
-                    log_attempt.error(f"Failed request after {max_attempts} attempts due to connection errors.", last_error=str(e))
-                    # Re-raise the last connection error, which will be wrapped by MCPConnectionError if it's an aiohttp.ClientError
+                    log_attempt.error(f"Failed request after {max_attempts} attempts or because non-idempotent.", last_error=str(e), is_idempotent=is_idempotent)
                     if isinstance(e, (MCPConnectionError, MCPTimeoutError)):
                         raise
                     else: # Wrap other ClientErrors
-                        raise MCPConnectionError(f"Failed request '{method}' after {max_attempts} attempts: {e}") from e
+                        raise MCPConnectionError(f"Failed request '{method}' (idempotent={is_idempotent}) after {attempt + 1} attempts: {e}") from e
 
             except MCPClientError: # Non-retryable application-level MCP errors (Protocol, ToolInvocation)
                 log_attempt.warning("Non-retryable MCPClientError encountered.")
@@ -182,46 +190,47 @@ class BaseMCPClient(abc.ABC):
             except Exception as e: # Catch any other unexpected errors
                 last_exception = e
                 log_attempt.exception(f"Unexpected error during request.", error_type=type(e).__name__)
-                # For unexpected errors, it's debatable to retry. For now, let's retry them.
-                if attempt < max_attempts - 1:
+                if is_idempotent and attempt < max_attempts - 1: # Only retry if idempotent
                     backoff_time = min(initial_backoff * (2 ** attempt) + random.uniform(0, 0.1 * initial_backoff), max_backoff)
                     await asyncio.sleep(backoff_time)
                 else:
-                    raise MCPClientError(f"Unexpected error during request '{method}' after {max_attempts} attempts: {e}") from e
+                    raise MCPClientError(f"Unexpected error during request '{method}' (idempotent={is_idempotent}) after {attempt+1} attempts: {e}") from e
 
-        # Fallback if loop finishes without returning or raising (should not happen with max_attempts >=1)
+        # Fallback if loop finishes without returning or raising (should not happen with max_attempts >=1 for idempotent calls)
         if last_exception:
-            self.logger.error("Request failed after all retries, re-raising last known exception.", method=method, last_exception_type=type(last_exception).__name__)
-            if isinstance(last_exception, MCPClientError): # Includes MCPConnectionError, MCPTimeoutError, etc.
+            self.logger.error("Request failed after all retries (or was non-idempotent), re-raising last known exception.", method=method, last_exception_type=type(last_exception).__name__)
+            if isinstance(last_exception, MCPClientError):
                 raise last_exception
-            else: # Wrap unexpected exceptions
+            else:
                 raise MCPClientError(f"Request '{method}' failed due to: {last_exception}") from last_exception
 
-        # Should be logically unreachable if max_attempts > 0
-        raise MCPClientError(f"Request '{method}' failed after exhausting retries, but no specific exception was properly propagated.")
+        raise MCPClientError(f"Request '{method}' failed after exhausting retries (or was non-idempotent), but no specific exception was properly propagated.")
 
 
     async def get_server_capabilities(self) -> Dict[str, Any]:
         """
         Retrieves the server's capabilities. Standard method name: "mcp.capabilities".
+        This is an idempotent operation.
         """
-        return await self.send_request(method="mcp.capabilities")
+        return await self.send_request(method="mcp.capabilities", is_idempotent=True)
 
     async def list_tools(self) -> List[Dict[str, Any]]:
         """
         Lists all tools available on the MCP server. Standard method name: "mcp.listTools".
+        This is an idempotent operation.
         The result should be a list of objects that can be parsed into MCPTool models.
         """
-        raw_tools_data = await self.send_request(method="mcp.listTools")
+        raw_tools_data = await self.send_request(method="mcp.listTools", is_idempotent=True)
         # TODO: Add Pydantic parsing here: [MCPTool.model_validate(t) for t in raw_tools_data]
         return raw_tools_data
 
     async def get_tool_schema(self, tool_name: str) -> Dict[str, Any]:
         """
         Retrieves the detailed schema for a specific tool. Standard method name: "mcp.getToolSchema".
+        This is an idempotent operation.
         The result should be an object parsable into an MCPTool model.
         """
-        tool_schema_data = await self.send_request(method="mcp.getToolSchema", params={"tool_name": tool_name})
+        tool_schema_data = await self.send_request(method="mcp.getToolSchema", params={"tool_name": tool_name}, is_idempotent=True)
         # TODO: Add Pydantic parsing here: MCPTool.model_validate(tool_schema_data)
         return tool_schema_data
 
@@ -229,16 +238,18 @@ class BaseMCPClient(abc.ABC):
         self,
         tool_name: str,
         parameters: Dict[str, Any],
+        is_idempotent: bool = False # Tool invocations are often NOT idempotent by default
     ) -> Any:
         """
         Invokes a specific tool on the MCP server. Tool methods are typically prefixed, e.g., "tool/calculator.add".
         Client-side validation of parameters against the tool's inputSchema should be performed
         by the calling agent/service before invoking this method.
+        Args:
+            tool_name: The name of the tool to invoke.
+            parameters: The parameters for the tool.
+            is_idempotent: Specify if this particular tool invocation is idempotent. Defaults to False.
         """
-        # The method naming convention (e.g., "tool/calculator.add" or a generic "mcp.invoke"
-        # with tool_name as a parameter) depends on the MCP specification.
-        # Assuming "tool/{tool_name}" as per common patterns and one of the doc snippets.
-        return await self.send_request(method=f"tool/{tool_name}", params=parameters)
+        return await self.send_request(method=f"tool/{tool_name}", params=parameters, is_idempotent=is_idempotent)
 
     async def subscribe_to_event(self, event_name: str) -> AsyncGenerator[Dict[str, Any], None]:
         """

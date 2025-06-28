@@ -117,25 +117,35 @@ class DynamicClientRegistrar:
 
         session = await self._get_session()
 
+        # Get dynamic client metadata from config
+        meta_cfg = self.app_config.auth.dynamic_client_metadata
+
+        base_client_name = f"MCP Vacuum ({self.app_config.agent_name}) for {server_info.name}"
+        if meta_cfg.client_name_suffix:
+            final_client_name = f"{base_client_name} - {meta_cfg.client_name_suffix}"
+        else:
+            final_client_name = base_client_name
+
         registration_request = {
-            "client_name": client_name or f"MCP Vacuum ({self.app_config.agent_name}) for {server_info.name}",
+            "client_name": client_name or final_client_name,
             "redirect_uris": redirect_uris or DEFAULT_REDIRECT_URIS,
             "grant_types": grant_types or DEFAULT_GRANT_TYPES,
             "response_types": response_types or DEFAULT_RESPONSE_TYPES,
             "token_endpoint_auth_method": token_endpoint_auth_method or DEFAULT_TOKEN_ENDPOINT_AUTH_METHOD,
             "scope": scope or DEFAULT_SCOPES,
-            # From documentation example:
-            "client_uri": f"https://github.com/tzervas/mcp-vacuum", # TODO: Make this configurable or use app_config.urls.Homepage
-            "logo_uri": "", # Optional: URL of client logo
-            "contacts": [self.app_config.agent_email] if hasattr(self.app_config, 'agent_email') and self.app_config.agent_email else [], # Optional: contact emails
-            "software_id": software_id or f"mcp-vacuum-{server_info.id}", # Make it somewhat unique per server if not provided
+
+            "client_uri": str(meta_cfg.client_uri) if meta_cfg.client_uri else "https://github.com/tzervas/mcp-vacuum", # Default if not set
+            "logo_uri": str(meta_cfg.logo_uri) if meta_cfg.logo_uri else None, # None if not set, will be cleaned
+            "contacts": meta_cfg.contacts if meta_cfg.contacts else None, # None if not set, will be cleaned
+
+            "software_id": software_id or f"mcp-vacuum-{server_info.id}",
             "software_version": software_version or app_version,
         }
         if extra_metadata:
             registration_request.update(extra_metadata)
 
-        # Remove any keys with None values, as some servers might be strict
-        registration_request_cleaned = {k: v for k, v in registration_request.items() if v is not None and v != [] and v != ""}
+        # Remove any keys with None values or empty lists, as some servers might be strict
+        registration_request_cleaned = {k: v for k, v in registration_request.items() if v is not None and v != []}
 
 
         headers = {"Content-Type": "application/json", "Accept": "application/json"}

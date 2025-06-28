@@ -28,7 +28,7 @@ The agent is designed with resilience, featuring retry mechanisms and circuit br
 *   **Containerized**: Production Dockerfile provided for easy deployment.
 *   **Structured Logging**: Uses `structlog` for JSON or console-formatted logs.
 
-##  архитектура (High-Level)
+##  Architecture (High-Level)
 
 MCP Vacuum employs a hierarchical agent architecture:
 

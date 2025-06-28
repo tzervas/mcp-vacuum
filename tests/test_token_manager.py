@@ -248,3 +248,78 @@ async def test_get_oauth_client_config_no_client_id_fails(
 # to ensure the lock prevents multiple refresh attempts. This is harder to test directly
 # without more complex asyncio synchronization in the test itself.
 # One way is to make refresh_token sleep, start two tasks, and check call counts.
+
+@pytest.mark.asyncio
+@patch('mcp_vacuum.auth.token_manager.OAuth2Client')
+async def test_get_valid_token_concurrent_refresh_lock(
+    MockOAuth2Client, token_manager, mock_token_storage, sample_server_info
+):
+    """Test that concurrent calls to get_valid_oauth_token for an expired token result in only one refresh attempt."""
+    server_id = sample_server_info.id
+    expired_stored_token = OAuth2Token(
+        access_token="concurrent_expired_token",
+        refresh_token="concurrent_refresh_token",
+        expires_in=10,
+        created_at=time.time() - 3600 # Expired 1 hour ago
+    )
+    mock_token_storage.get_oauth_token.return_value = expired_stored_token
+
+    refreshed_token = OAuth2Token(access_token="concurrent_refreshed_token", expires_in=3600)
+
+    # Mock _perform_token_refresh directly to control its execution and count calls
+    # The actual OAuth2Client part is less important here than the lock mechanism.
+    # We need to mock the method on the instance of token_manager.
+
+    # Create a counter for _perform_token_refresh calls
+    refresh_call_count = 0
+    original_perform_refresh = token_manager._perform_token_refresh
+
+    async def mock_perform_refresh_with_delay(*args, **kwargs):
+        nonlocal refresh_call_count
+        refresh_call_count += 1
+        # Simulate network delay for the refresh operation
+        await asyncio.sleep(0.2) # Increased delay to ensure tasks contend for lock
+        # Call the original method or return a fixed token
+        # For simplicity, let's assume it returns a fixed token here,
+        # as we've tested the full refresh logic elsewhere.
+        # Or, we can mock the OAuth2Client part as in other tests if _get_oauth_client_config is robust
+
+        # In this test, we are focusing on the lock, so _get_oauth_client_config should be reliable
+        # or mocked if it makes external calls (like DCR) that we don't want here.
+        # Let's ensure _get_oauth_client_config returns something valid without DCR.
+        app_config = token_manager.app_config
+        app_config.auth.oauth_dynamic_client_registration = False # Disable DCR
+
+        # Simulate a successful refresh that would be done by original_perform_refresh
+        # This requires OAuth2Client to be mocked if we were calling original_perform_refresh
+        # For this specific test, let's directly return the refreshed_token from this mock
+        # and check the call count.
+
+        # The mocked OAuth2Client from the decorator
+        mock_oauth_client_instance = AsyncMock(spec=OAuth2Client)
+        mock_oauth_client_instance.refresh_token = AsyncMock(return_value=refreshed_token)
+        MockOAuth2Client.return_value.__aenter__.return_value = mock_oauth_client_instance
+
+        # This mock is for _perform_token_refresh, so it should return the token
+        # and handle storage internally like the original would.
+        await token_manager._token_storage.store_oauth_token(server_id, refreshed_token)
+        token_manager._token_cache[server_id] = refreshed_token
+        return refreshed_token
+
+    with patch.object(token_manager, '_perform_token_refresh', side_effect=mock_perform_refresh_with_delay) as mock_refresh_method:
+        task1 = asyncio.create_task(token_manager.get_valid_oauth_token(server_id, sample_server_info))
+        task2 = asyncio.create_task(token_manager.get_valid_oauth_token(server_id, sample_server_info))
+        task3 = asyncio.create_task(token_manager.get_valid_oauth_token(server_id, sample_server_info))
+
+        results = await asyncio.gather(task1, task2, task3)
+
+    assert refresh_call_count == 1 # Check our manual counter
+    mock_refresh_method.assert_called_once() # Check the mock object's call count
+
+    for result_token in results:
+        assert result_token is not None
+        assert result_token.access_token == "concurrent_refreshed_token"
+
+    # Verify token is stored and cached
+    mock_token_storage.store_oauth_token.assert_called_with(server_id, refreshed_token)
+    assert token_manager._token_cache[server_id] == refreshed_token
