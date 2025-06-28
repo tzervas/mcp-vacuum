@@ -251,22 +251,44 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
         # then for all resulting auth tasks, then all conversion tasks.
         # Or, have a timeout for the entire operation.
 
-        # Example: Wait for a certain period or until queues seem idle.
-        # This needs to be more sophisticated.
-        await asyncio.sleep(1) # Give time for initial command to be processed
+        # --- Main Workflow Phases ---
+
+        # 1. Discovery Phase
+        # Discovery agent will run its methods (mDNS, SSDP) for a configured duration.
+        discovery_duration = self.app_config.discovery.timeout_seconds
+        self.logger.info(f"Discovery phase started. Will run for {discovery_duration} seconds.")
+
+        # Let discovery run for the specified duration.
+        # The discovery_agent.discover_servers_command itself doesn't block indefinitely here;
+        # it starts tasks within the DiscoveryAgent.
+        await asyncio.sleep(discovery_duration)
+
+        if self.discovery_agent:
+            self.logger.info("Discovery window elapsed. Stopping active discovery processes in DiscoveryAgent.")
+            await self.discovery_agent.stop_current_discovery()
+            # This should cause the discovery tasks in DiscoveryAgent to finish,
+            # and no more items will be added to self.discovery_event_queue by them.
+
+        self.logger.info("Waiting for all queued DiscoveredServerEvents to be processed...")
         await self.discovery_event_queue.join()
-        self.logger.info("Initial discovery queue processed.")
+        self.logger.info("Initial discovery phase complete: all found servers processed by orchestrator.")
+
+        # 2. Authentication Phase
+        # All authentication requests triggered by the above discovery events should now be in auth_event_queue (or processed).
+        self.logger.info("Waiting for all authentication tasks to complete...")
         await self.auth_event_queue.join()
-        self.logger.info("Authentication queue processed.")
+        self.logger.info("Authentication phase complete: all triggered authentications processed.")
+
+        # 3. Schema Conversion Phase
+        # All conversion requests triggered by successful authentications should now be in conversion_event_queue (or processed).
+        self.logger.info("Waiting for all schema conversion tasks to complete...")
         await self.conversion_event_queue.join()
-        self.logger.info("Conversion queue processed.")
+        self.logger.info("Schema conversion phase complete: all triggered conversions processed.")
 
-        # This join mechanism assumes agents put items on queues and then finish.
-        # If agents are long-running and continuously add to queues, this won't work as a completion signal.
-        # ADK might provide its own workflow management / completion signals.
+        self.logger.info("All main workflow phases (discovery, auth, conversion) are complete.")
 
-        self.logger.info("Main workflow phase assumed complete. Stopping processors.")
-        await self.stop_workflow_processing() # Gracefully stop processors
+        # Stop the orchestrator's own event processor loops.
+        await self.stop_workflow_processing()
 
         final_summary = self.get_summary()
         self.logger.info("Orchestration workflow finished.", **final_summary)

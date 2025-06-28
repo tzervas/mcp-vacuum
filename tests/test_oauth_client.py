@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from urllib.parse import urlparse, parse_qs
 import json
 
-from mcp_vacuum.config import Config, OAuth2ClientConfig as AppOAuthClientConfig, MCPClientConfig
+from mcp_vacuum.config import Config, MCPClientConfig
 from mcp_vacuum.auth.oauth_client import OAuth2Client
 from mcp_vacuum.auth.pkce import generate_pkce_challenge_pair
-from mcp_vacuum.models.auth import OAuth2Token, PKCEChallenge, OAuthError
+from mcp_vacuum.models.auth import OAuth2Token, PKCEChallenge, OAuthError, OAuth2ClientConfig as AppOAuthClientConfig
 from mcp_vacuum.mcp_client.exceptions import MCPAuthError, MCPConnectionError
 
 # Default app_config for tests

@@ -3,10 +3,11 @@ from pydantic import BaseModel, HttpUrl
 from typing import List, Optional, Dict, Any, Literal
 
 class BasePydanticModel(BaseModel):
-    class Config:
-        extra = 'forbid'
-        populate_by_name = True
-        use_enum_values = True
+    model_config = {
+        "extra": "forbid",
+        "populate_by_name": True,
+        "use_enum_values": True,
+    }
 
 class TransportType(str, Enum):
     STDIO = "stdio"
@@ -72,7 +73,8 @@ class KagentCRDSchema(BasePydanticModel):
     # Other JSON Schema fields like 'description', 'format', 'enum', etc.
     # For Kubernetes compatibility, some fields might be under 'x-kubernetes-*'
 
-    class Config:
-        extra = 'allow' # Allow other JSON schema fields
-        populate_by_name = True
-        use_enum_values = True
+    model_config = {
+        "extra": "allow",  # Allow other JSON schema fields
+        "populate_by_name": True,
+        "use_enum_values": True,
+    }

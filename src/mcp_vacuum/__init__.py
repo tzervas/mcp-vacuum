@@ -8,7 +8,8 @@ __version__ = "0.1.0"
 __author__ = "Tyler Zervas"
 __email__ = "tz-dev@vectorweight.com"
 
-from .agent import MCPVacuumAgent
+# from .agent import MCPVacuumAgent # Commented out due to ModuleNotFoundError: No module named 'mcp_vacuum.agent'
 from .config import Config
 
-__all__ = ["MCPVacuumAgent", "Config"]
+# __all__ = ["MCPVacuumAgent", "Config"]
+__all__ = ["Config"] # Adjusted __all__

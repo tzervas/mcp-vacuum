@@ -23,11 +23,12 @@ def generate_pkce_challenge_pair(code_challenge_method: str = "S256") -> PKCECha
     Raises:
         ValueError: If an unsupported code_challenge_method is provided.
     """
-    if not 43 <= 128 <= 128: # Standard length constraints for verifier
-        # This is a fixed range, but good to be aware if it were configurable
-        # For verifier: min 43, max 128 chars. secrets.token_urlsafe(96) gives 128 chars.
-        # secrets.token_urlsafe(32) gives ~43 chars. Let's aim for a good length.
-        pass
+    # The following condition was a no-op and has been removed.
+    # if not 43 <= 128 <= 128: # Standard length constraints for verifier
+    #     # This is a fixed range, but good to be aware if it were configurable
+    #     # For verifier: min 43, max 128 chars. secrets.token_urlsafe(96) gives 128 chars.
+    #     # secrets.token_urlsafe(32) gives ~43 chars. Let's aim for a good length.
+    #     pass
 
     # Generate a high-entropy cryptographic random string as the code verifier
     # RFC 7636 recommends a length between 43 and 128 characters.

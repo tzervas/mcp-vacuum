@@ -19,17 +19,17 @@ from .mcp import (
     MCPServerInfo,
     MCPTool,
 )
-from .kagent import (
-    ConversionMetadataModel,
-    ConversionResult,
-    KagentCRDSchema, # Re-exporting for clarity if used directly from models
-    KagentMetadata,
-    KagentTool,
-    KagentToolSpec,
-    ValidationIssue,
-    ValidationResult,
-    ValidationSeverity,
-)
+# from .kagent import ( # Commented out due to ModuleNotFoundError: No module named 'mcp_vacuum.models.kagent'
+#     ConversionMetadataModel,
+#     ConversionResult,
+#     KagentCRDSchema, # Re-exporting for clarity if used directly from models
+#     KagentMetadata,
+#     KagentTool,
+#     KagentToolSpec,
+#     ValidationIssue,
+#     ValidationResult,
+#     ValidationSeverity,
+# )
 from .auth import (
     AuthMethod, # Re-exporting
     AuthorizationCodeResponse,
@@ -47,13 +47,14 @@ __all__ = [
     "AuthorizationCodeResponse",
     "BasePydanticModel",
     "ClientCredentials",
-    "ConversionMetadataModel",
-    "ConversionResult",
+    # "ConversionMetadataModel", # from kagent
+    # "ConversionResult", # from kagent
     # KagentCRDSchema is already imported from .common and re-exported from .kagent, ensure it's correctly listed once if necessary
     # For now, assuming the re-export from .kagent is primary for this __all__
-    "KagentMetadata",
-    "KagentTool",
-    "KagentToolSpec",
+    # "KagentMetadata", # from kagent
+    # "KagentTool", # from kagent
+    # "KagentToolSpec", # from kagent
+    "KagentCRDSchema", # This one is also imported from .common, so might be okay to keep if common is used directly
     "MCPAnnotations", # Corrected: MCPAnnotation removed
     "MCPCapabilities",
     "MCPCapability",
@@ -69,7 +70,7 @@ __all__ = [
     "TokenRequest",
     "ToolCategory",
     "TransportType",
-    "ValidationIssue",
-    "ValidationResult",
-    "ValidationSeverity",
+    # "ValidationIssue", # from kagent
+    # "ValidationResult", # from kagent
+    # "ValidationSeverity", # from kagent
 ]

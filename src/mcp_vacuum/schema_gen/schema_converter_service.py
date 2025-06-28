@@ -120,11 +120,20 @@ class SchemaConverterService:
         k8s_schema_dict = json.loads(json.dumps(json_schema)) # Deep copy
 
         # Keywords to remove from top level and nested schemas
-        unsupported_keywords = ["$schema", "$id", "definitions", "$ref", "const", "examples"] # examples is valid in openapi but often large
+        # For $ref and definitions, we should warn, not just silently remove.
+        unsupported_keywords = ["$schema", "$id", "const", "examples"] # examples is valid in openapi but often large
+
+        has_refs_or_definitions = False
 
         def transform_node(node: Dict[str, Any]) -> Dict[str, Any]:
+            nonlocal has_refs_or_definitions
             if not isinstance(node, dict):
                 return node
+
+            if "$ref" in node or "definitions" in node:
+                has_refs_or_definitions = True
+                node.pop("$ref", None)
+                node.pop("definitions", None)
 
             for keyword in unsupported_keywords:
                 node.pop(keyword, None)
@@ -182,6 +191,14 @@ class SchemaConverterService:
 
         # For output schemas, if it's not an object, that's fine.
         # e.g. a tool might output a simple string or number. KagentCRDSchema can represent this.
+
+        if has_refs_or_definitions:
+            self.logger.warning(
+                "Schema transformation encountered and removed '$ref' or 'definitions' keywords.",
+                details="Referenced schemas might be lost, leading to incomplete Kagent CRD. This tool does not currently support resolving external or internal references.",
+                tool_name=mcp_tool_name or "UnknownTool",
+                schema_context="output_schema" if is_output_schema else "input_schema"
+            )
 
         return KagentCRDSchema.model_validate(transformed_dict)
 
@@ -253,7 +270,22 @@ class SchemaConverterService:
             #    - Structural validation (Pydantic does this on model creation)
             #    - K8s compatibility (names, lengths - partially handled by sanitization)
             if not kagent_input_schema.properties and mcp_tool.input_schema.get("properties"):
-                 validation_issues.append(ValidationIssue(severity=ValidationSeverity.WARNING, message="Input schema properties might have been lost or not transformed correctly.", field_path="spec.parameters"))
+                # Check if the original schema actually had properties. It might have been a non-object schema.
+                original_had_properties = isinstance(mcp_tool.input_schema.get("properties"), dict) and mcp_tool.input_schema.get("properties")
+
+                if original_had_properties: # Only issue error if original schema *had* properties and now they are gone.
+                    validation_issues.append(
+                        ValidationIssue(
+                            severity=ValidationSeverity.ERROR, # Changed from WARNING to ERROR
+                            message="All input schema properties appear to have been lost during conversion. This could indicate a critical issue.",
+                            field_path="spec.parameters"
+                        )
+                    )
+                else:
+                    # If original input schema was not an object or had no properties, it's not an error that kagent_input_schema has no properties.
+                    # It might have been intentionally converted to an empty object schema if it was, e.g. a string.
+                    # The _transform_json_schema_to_k8s_crd method logs a warning for non-object input schemas.
+                    pass # No issue here if original didn't have properties
 
             # TODO: Implement more robust validation steps as per "Validation Pipeline" section of docs.
 

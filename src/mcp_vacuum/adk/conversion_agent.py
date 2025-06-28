@@ -52,7 +52,7 @@ class ConversionAgent(MCPVacuumBaseAgent):
 
         converted_kagent_tools: List[KagentTool] = []
         conversion_errors: List[str] = []
-        success_overall = True
+        # success_overall = True # Removed
 
         try:
             # The SchemaConverterService might convert one tool at a time or a batch.
@@ -78,22 +78,22 @@ class ConversionAgent(MCPVacuumBaseAgent):
                         # Conversion failed for this tool
                         tool_log.error("Failed to convert MCP tool to Kagent format.", error_details=kagent_tool_result.error_message if kagent_tool_result else "Unknown service error")
                         conversion_errors.append(f"Tool '{mcp_tool.name}': {kagent_tool_result.error_message if kagent_tool_result else 'Failed'}")
-                        success_overall = False # If one tool fails, mark overall as partial or full failure based on policy
+                        # success_overall = False # Removed
                 except Exception as tool_e:
                     tool_log.exception("Unexpected error converting tool.", error=str(tool_e))
                     conversion_errors.append(f"Tool '{mcp_tool.name}': Unexpected error - {str(tool_e)}")
-                    success_overall = False
+                    # success_overall = False # Removed
 
             if not conversion_errors:
                 log.info("All tools converted successfully.")
             else:
                 log.warning("Some tools failed conversion.", num_failed=len(conversion_errors), errors=conversion_errors)
-                # success_overall might already be False
+                # success_overall might already be False # Comment no longer relevant
 
             final_error_message = "; ".join(conversion_errors) if conversion_errors else None
             event = SchemaConversionResultEvent(
                 server_id=server_info.id,
-                success=success_overall and not conversion_errors, # Strict: only success if no errors at all
+                success=not conversion_errors, # Success if there are no entries in conversion_errors.
                 kagent_tools_schemas=converted_kagent_tools,
                 original_tool_count=len(mcp_tools),
                 error_message=final_error_message

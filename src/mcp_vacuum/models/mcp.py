@@ -32,7 +32,8 @@ class MCPServerInfo(BasePydanticModel): # Used for dynamic client registration c
     name: str
     # Add other fields that might be relevant for client registration, e.g. server_id
     id: str
-    registration_endpoint: HttpUrl # The specific registration endpoint for this server
+    registration_endpoint: Optional[HttpUrl] = None # The specific registration endpoint for this server, if supported
+    endpoint: Optional[HttpUrl] = None # Main server endpoint, useful context for registration if needed
 
 class MCPCapabilities(BasePydanticModel): # Response from /capabilities endpoint
     # This model structure depends on how MCP servers expose capabilities.

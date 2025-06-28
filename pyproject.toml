@@ -8,14 +8,18 @@ authors = [
 dependencies = [
     "google-adk",  # Google Python Agent Developer Kit
     "cryptography>=42.0.0",  # For secure credential storage
-    "pydantic>=2.5.0",  # For schema validation and serialization
+    "pydantic[email]>=2.5.0",  # For schema validation and serialization (with email validation)
     "aiohttp>=3.9.0",  # For async HTTP communications
     "netifaces>=0.11.0",  # For network interface discovery
+    "keyring>=25.0.0", # For storing secrets
     "structlog>=24.1.0",  # For structured logging
     "python-jose[cryptography]>=3.3.0",  # For JWT handling
     "click>=8.1.0",  # For CLI interface
+    "pydantic-settings (>=2.10.1,<3.0.0)",
+    "zeroconf>=0.39.0", # For mDNS discovery, ensuring Py3.12+ support
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.12" # Project requires Python 3.12 or newer
+
 readme = "README.md"
 license = {file = "LICENSE"}
 
@@ -77,3 +81,6 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
+
+[tool.poetry.group.dev.dependencies]
+pytest-cov = "^6.2.1"
