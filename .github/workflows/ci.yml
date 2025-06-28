@@ -1,0 +1,71 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH # Older uv versions, $HOME/.uv/bin for newer
+        echo "$HOME/.uv/bin" >> $GITHUB_PATH    # Ensure new path is included
+        uv --version # Verify installation
+
+    - name: Install dependencies using uv
+      run: |
+        uv pip install --system --upgrade pip # Ensure pip is there for uv's pip backend if needed
+        uv venv .venv --python ${{ matrix.python-version }}
+        source .venv/bin/activate
+        uv pip install --editable ".[dev]"
+
+    - name: Lint with Ruff
+      run: |
+        source .venv/bin/activate
+        uv run ruff check .
+
+    - name: Format with Black (check only)
+      run: |
+        source .venv/bin/activate
+        uv run black --check .
+
+    - name: Type check with MyPy
+      run: |
+        source .venv/bin/activate
+        uv run mypy src tests
+
+    - name: Test with Pytest and generate coverage
+      run: |
+        source .venv/bin/activate
+        uv run pytest --cov=src/mcp_vacuum --cov-report=xml --cov-report=term-missing tests/
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }} # Optional: if you use Codecov private repo
+        files: ./coverage.xml
+        fail_ci_if_error: true
+        verbose: true
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }} # Also pass as env var
+      # Remove this step or make token optional if not using Codecov / public repo
+      # For public repos, token is often not strictly needed.
+      # Consider adding `continue-on-error: true` for this step if coverage upload failure is not critical.
