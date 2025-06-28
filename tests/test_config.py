@@ -21,7 +21,8 @@ def test_config_from_env(monkeypatch):
     monkeypatch.setenv("MCP_VACUUM_MCP_CLIENT_MAX_RETRIES", "5")
     monkeypatch.setenv("MCP_VACUUM_MCP_CLIENT_SSL_VERIFY", "false")
 
-    config = Config.from_env() # Default prefix is "MCP_VACUUM_"
+    # With pydantic-settings, Config() directly loads from env vars
+    config = Config()
     
     assert config.logging.level == "DEBUG"
     assert config.agent_name == "TestAgent"

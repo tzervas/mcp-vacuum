@@ -35,13 +35,20 @@ class ConversionAgent(MCPVacuumBaseAgent):
         self.output_queue = output_queue # Queue to send SchemaConversionResultEvent to Orchestrator
         self.logger.info("ConversionAgent initialized.")
         # self._conversion_tasks: Dict[str, asyncio.Task] = {} # server_id -> task, if managing ongoing conversions
+        self.fail_fast_conversion = app_config.agent_settings.get("fail_fast_conversion", False) # Example: get from general agent settings
 
-    async def convert_schemas_command(self, server_info: MCPServerInfo, mcp_tools: List[MCPTool]):
+    async def convert_schemas_command(self, server_info: MCPServerInfo, mcp_tools: List[MCPTool], fail_fast: Optional[bool] = None):
         """
         Command to convert a list of MCPTools for a given server.
         Called by OrchestrationAgent after tools are fetched for an authenticated server.
+        Args:
+            server_info: Information about the server whose tools are being converted.
+            mcp_tools: The list of MCPTool objects to convert.
+            fail_fast: If True, stops conversion on the first tool that fails.
+                       Overrides instance-level fail_fast_conversion if provided.
         """
-        log = self.logger.bind(server_id=server_info.id, server_name=server_info.name, num_tools=len(mcp_tools))
+        current_fail_fast = fail_fast if fail_fast is not None else self.fail_fast_conversion
+        log = self.logger.bind(server_id=server_info.id, server_name=server_info.name, num_tools=len(mcp_tools), fail_fast=current_fail_fast)
         log.info("Received command to convert schemas.")
 
         if not mcp_tools:
@@ -67,22 +74,30 @@ class ConversionAgent(MCPVacuumBaseAgent):
                     # and potentially validation results.
                     kagent_tool_result = await self.converter_service.convert_mcp_tool_to_kagent(mcp_tool, server_info)
 
-                    if kagent_tool_result and kagent_tool_result.kagent_tool: # Assuming result is an object with .kagent_tool and .validation_issues
+                    if kagent_tool_result and kagent_tool_result.kagent_tool:
                         converted_kagent_tools.append(kagent_tool_result.kagent_tool)
                         if kagent_tool_result.validation_issues and any(i.severity == "error" for i in kagent_tool_result.validation_issues):
-                            tool_log.warning("Conversion succeeded with validation errors.", issues=[i.model_dump() for i in kagent_tool_result.validation_issues])
-                            # Mark overall success based on policy, e.g. if any error, overall might not be success.
+                            validation_error_details = [i.model_dump() for i in kagent_tool_result.validation_issues if i.severity == "error"]
+                            tool_log.warning("Conversion succeeded with validation errors.", issues=validation_error_details)
+                            conversion_errors.append(f"Tool '{mcp_tool.name}': Succeeded with validation errors: {validation_error_details}")
+                            if current_fail_fast:
+                                log.warning("Fail-fast enabled and validation errors occurred. Stopping conversion.")
+                                raise RuntimeError(f"Conversion failed for tool {mcp_tool.name} due to validation errors: {validation_error_details}")
                         else:
                             tool_log.debug("Tool converted successfully.")
                     else:
-                        # Conversion failed for this tool
-                        tool_log.error("Failed to convert MCP tool to Kagent format.", error_details=kagent_tool_result.error_message if kagent_tool_result else "Unknown service error")
-                        conversion_errors.append(f"Tool '{mcp_tool.name}': {kagent_tool_result.error_message if kagent_tool_result else 'Failed'}")
-                        # success_overall = False # Removed
+                        err_msg = kagent_tool_result.error_message if kagent_tool_result and kagent_tool_result.error_message else "Unknown conversion service error"
+                        tool_log.error("Failed to convert MCP tool to Kagent format.", error_details=err_msg)
+                        conversion_errors.append(f"Tool '{mcp_tool.name}': {err_msg}")
+                        if current_fail_fast:
+                            log.warning("Fail-fast enabled and conversion error occurred. Stopping conversion.")
+                            raise RuntimeError(f"Conversion failed for tool {mcp_tool.name}: {err_msg}")
                 except Exception as tool_e:
                     tool_log.exception("Unexpected error converting tool.", error=str(tool_e))
                     conversion_errors.append(f"Tool '{mcp_tool.name}': Unexpected error - {str(tool_e)}")
-                    # success_overall = False # Removed
+                    if current_fail_fast:
+                        log.warning("Fail-fast enabled and unexpected error occurred during tool conversion. Stopping conversion.")
+                        raise # Re-raise the original exception to stop processing
 
             if not conversion_errors:
                 log.info("All tools converted successfully.")

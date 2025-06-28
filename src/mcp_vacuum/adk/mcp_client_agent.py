@@ -105,7 +105,19 @@ class MCPClientAgent(MCPVacuumBaseAgent):
         token: Optional[OAuth2Token] = await self.auth_agent.get_token_for_server_command(server_info.id, server_info)
 
         if not token:
-            log.warning("No token available from AuthenticationAgent. MCP client calls may fail.")
+            log.warning("No token available from AuthenticationAgent on first attempt. Retrying token acquisition...")
+            # Retry once in case of expiry/invalidation
+            # Ensure get_token_for_server_command supports force_refresh or similar.
+            # This assumes AuthenticationAgent.get_token_for_server_command can take force_refresh.
+            # If not, this part needs adjustment or the capability added to AuthAgent.
+            if hasattr(self.auth_agent, "get_token_for_server_command"): # Basic check
+                 token = await self.auth_agent.get_token_for_server_command(server_info.id, server_info, force_refresh=True)
+            else: # Fallback if force_refresh is not directly supported in this way
+                 log.warning("AuthAgent does not seem to support explicit force_refresh. Simple retry may not be effective for expired tokens.")
+                 # Consider if a different call to auth_agent is needed, e.g., one that always refreshes.
+
+        if not token:
+            log.warning("No token available from AuthenticationAgent after retry. MCP client calls may fail.")
             # Depending on server auth requirements, this might be acceptable (e.g. public tools)
             # or it might mean all subsequent calls will fail.
             await client.set_auth_token(None) # Explicitly clear any old token

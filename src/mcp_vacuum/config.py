@@ -30,6 +30,15 @@ class DiscoveryConfig(BaseModel): # Remains BaseModel, nested under Config (Base
     cache_ttl_seconds: int = Field(default=300, ge=10, le=3600, description="TTL for discovered service cache in seconds.")
     allowed_networks: List[str] = Field(default_factory=list, description="List of allowed network ranges (CIDR format) for discovered services. If empty, all are allowed.")
 
+class DynamicClientRegistrationSettings(BaseModel):
+    """Settings for dynamic client registration metadata."""
+    client_name_suffix: Optional[str] = Field(None, description="Optional suffix to append to the auto-generated client name during dynamic registration. e.g., 'MyOrg'.")
+    client_uri: Optional[HttpUrl] = Field(None, description="URL of the home page of the client application.")
+    logo_uri: Optional[HttpUrl] = Field(None, description="URL that references a logo for the client application.")
+    contacts: List[EmailStr] = Field(default_factory=list, description="Contact email addresses for the client (must be valid emails).")
+    # policy_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand how the client uses data.")
+    # tos_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand terms of service.")
+
 class OAuthClientDetails(BaseModel): # Remains BaseModel
     """Details for a pre-configured OAuth client."""
     client_id: str
@@ -38,15 +47,6 @@ class OAuthClientDetails(BaseModel): # Remains BaseModel
     token_endpoint: Optional[HttpUrl] = None
     redirect_uri: Optional[HttpUrl] = Field(default="http://localhost:8080/oauth/callback", description="Default redirect URI for CLI flows.")
     scopes: List[str] = Field(default_factory=lambda: ["openid", "profile", "mcp:tools", "mcp:resources"])
-
-class DynamicClientRegistrationSettings(BaseModel):
-    """Settings for dynamic client registration metadata."""
-    client_name_suffix: Optional[str] = Field(None, description="Optional suffix to append to the auto-generated client name during dynamic registration. e.g., 'MyOrg'.")
-    client_uri: Optional[HttpUrl] = Field(None, description="URL of the home page of the client application.")
-    logo_uri: Optional[HttpUrl] = Field(None, description="URL that references a logo for the client application.")
-    contacts: Optional[List[EmailStr]] = Field(None, description="List of e-mail addresses (must be valid format) for human support for the client.")
-    # policy_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand how the client uses data.")
-    # tos_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand terms of service.")
 
 class AuthConfig(BaseModel): # Remains BaseModel
     """Configuration for authentication."""

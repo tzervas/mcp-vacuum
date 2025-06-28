@@ -39,9 +39,8 @@ class DiscoveryAgent(MCPVacuumBaseAgent):
         """
         self.logger.info("Received command to discover servers.", target_networks=target_networks)
 
-        # Clear previous tasks if any, or manage them if multiple discoveries can run.
-        # For now, assume one main discovery operation at a time.
-        await self.stop_current_discovery() # Stop any ongoing discovery first
+        # Allow overlapping discovery operations by not stopping current discovery tasks.
+        # Each discovery command will start new discovery tasks and track them.
 
         # mDNS Discovery Task
         if self.app_config.discovery.enable_mdns:

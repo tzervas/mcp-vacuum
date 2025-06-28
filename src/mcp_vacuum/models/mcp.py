@@ -46,4 +46,7 @@ class MCPCapabilities(BasePydanticModel): # Response from /capabilities endpoint
     # supported_auth_methods: List[AuthMethod] = Field(default_factory=list)
 
     class Config:
-        extra = 'allow' # Allow additional fields from the server's capabilities response
+        extra = 'ignore' # Changed from 'allow' to 'ignore'
+                         # This will ignore any fields not defined in the model,
+                         # which is generally safer than 'allow' if the extra fields are not needed.
+                         # If specific extra fields become important, they should be added to the model.

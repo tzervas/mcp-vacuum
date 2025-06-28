@@ -117,7 +117,7 @@ class BaseMCPClient(abc.ABC):
         # HTTP is often connectionless per request, so is_connected might be less relevant before the actual attempt.
         # For other transport types, a persistent connection is usually expected.
         from ..models.common import TransportType # Import for enum comparison
-        if not await self.is_connected() and self.service_record.transport_type != TransportType.HTTP:
+        if not await self.is_connected() and self.service_record.transport_type != TransportType.HTTP: # HTTP is often connectionless per request
             # Attempt to reconnect or raise error, depending on strategy
             # For now, let's assume connect() should be called explicitly by managing code if needed.
              raise MCPConnectionError(f"Not connected to MCP server: {self.service_record.name} for non-HTTP transport.")
@@ -176,7 +176,8 @@ class BaseMCPClient(abc.ABC):
                 # The retry loop here provides an additional layer of retries if the CB is CLOSED/HALF_OPEN.
                 last_exception = e
                 if is_idempotent and attempt < max_attempts - 1: # Only retry if idempotent
-                    backoff_time = min(initial_backoff * (2 ** attempt) + random.uniform(0, 0.1 * initial_backoff), max_backoff)
+                    backoff_time = initial_backoff * (2 ** attempt) + random.uniform(0, 0.1 * initial_backoff)
+                    backoff_time = min(backoff_time, max_backoff) # Cap at max_backoff
                     log_attempt.warning(f"Connection error encountered. Retrying in {backoff_time:.2f}s...", error_message=str(e), error_type=type(e).__name__)
                     await asyncio.sleep(backoff_time)
                 else:
@@ -259,8 +260,6 @@ class BaseMCPClient(abc.ABC):
         Subscribes to a server-side event stream (if transport supports it, e.g., SSE, WebSockets).
         """
         raise NotImplementedError(f"Event subscription via 'subscribe_to_event' is not implemented for {self.service_record.transport_type.value} transport.")
-        # yield {} # This was unreachable and has been removed.
-
 
     def get_session(self) -> Optional[aiohttp.ClientSession]:
         """Returns the aiohttp session if used by the client (primarily for HTTP-based transports)."""
