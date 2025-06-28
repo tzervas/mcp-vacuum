@@ -114,7 +114,10 @@ class BaseMCPClient(abc.ABC):
             is_idempotent: Whether the operation is idempotent. Non-idempotent operations
                            will not be retried by this client's retry logic.
         """
-        if not await self.is_connected() and not self.service_record.transport_type == "http": # HTTP is often connectionless per request
+        # HTTP is often connectionless per request, so is_connected might be less relevant before the actual attempt.
+        # For other transport types, a persistent connection is usually expected.
+        from ..models.common import TransportType # Import for enum comparison
+        if not await self.is_connected() and self.service_record.transport_type != TransportType.HTTP:
             # Attempt to reconnect or raise error, depending on strategy
             # For now, let's assume connect() should be called explicitly by managing code if needed.
              raise MCPConnectionError(f"Not connected to MCP server: {self.service_record.name} for non-HTTP transport.")
@@ -256,7 +259,8 @@ class BaseMCPClient(abc.ABC):
         Subscribes to a server-side event stream (if transport supports it, e.g., SSE, WebSockets).
         """
         raise NotImplementedError(f"Event subscription via 'subscribe_to_event' is not implemented for {self.service_record.transport_type.value} transport.")
-        yield {} # Required to make it an async generator
+        # yield {} # This was unreachable and has been removed.
+
 
     def get_session(self) -> Optional[aiohttp.ClientSession]:
         """Returns the aiohttp session if used by the client (primarily for HTTP-based transports)."""

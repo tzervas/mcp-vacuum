@@ -6,7 +6,8 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 import time
 
-from mcp_vacuum.config import Config, AuthConfig, OAuthClientDetails as AppOAuthClientDetails, MCPServerInfo as ConfigMCPServerInfo # Assuming MCPServerInfo might be in config for defaults
+from mcp_vacuum.config import Config, AuthConfig, OAuthClientDetails as AppOAuthClientDetails
+from mcp_vacuum.models.mcp import MCPServerInfo as ConfigMCPServerInfo # Moved import
 from mcp_vacuum.auth.token_manager import TokenManager
 from mcp_vacuum.auth.token_storage import BaseTokenStorage, TokenNotFoundError
 from mcp_vacuum.auth.oauth_client import OAuth2Client

@@ -53,60 +53,69 @@ class MCPDiscoveryService:
         mdns_queue = asyncio.Queue()
         self._mdns_internal_queue = mdns_queue # Share queue with processor for _process_mdns_service_info
 
-        async with AsyncZeroconf() as aiozc: # Use AsyncZeroconf as a context manager
-            async def on_service_state_change(
-                zc: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange
-            ) -> None:
-                log = self.logger.bind(service_name=name, service_type=service_type, state=state_change)
-                log.debug("mDNS service state change detected.")
+        try:
+            async with AsyncZeroconf() as aiozc: # Use AsyncZeroconf as a context manager
+                async def on_service_state_change(
+                    zc: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange
+                ) -> None:
+                    log = self.logger.bind(service_name=name, service_type=service_type, state=state_change)
+                    log.debug("mDNS service state change detected.")
 
-                if state_change == ServiceStateChange.Added:
-                    # Schedule the async processing of service info
-                    asyncio.create_task(self._process_mdns_service_info(aiozc.zeroconf, service_type, name, session_discovered_ids))
+                    if state_change == ServiceStateChange.Added:
+                        # Schedule the async processing of service info
+                        asyncio.create_task(self._process_mdns_service_info(aiozc.zeroconf, service_type, name, session_discovered_ids))
 
-            browser = AsyncServiceBrowser(
-                aiozc.zeroconf, service_types_to_query, handlers=[on_service_state_change]
-            )
+                browser = AsyncServiceBrowser(
+                    aiozc.zeroconf, service_types_to_query, handlers=[on_service_state_change]
+                )
 
-            discovery_duration = timeout if timeout is not None else self.discovery_config.timeout_seconds
-            end_time = asyncio.get_event_loop().time() + discovery_duration
+                discovery_duration = timeout if timeout is not None else self.discovery_config.timeout_seconds
+                end_time = asyncio.get_event_loop().time() + discovery_duration
 
-            try:
-                while asyncio.get_event_loop().time() < end_time:
-                    try:
-                        record: MCPServiceRecord = await asyncio.wait_for(mdns_queue.get(), timeout=0.5)
+                try:
+                    while asyncio.get_event_loop().time() < end_time:
+                        try:
+                            record: MCPServiceRecord = await asyncio.wait_for(mdns_queue.get(), timeout=0.5)
 
-                        if not self._is_service_allowed(record):
-                            self.logger.debug("mDNS discovered service filtered out by allowed_networks", service_id=record.id, endpoint=record.endpoint)
-                            mdns_queue.task_done()
-                            continue
+                            # Ensure _is_service_allowed is awaited if it becomes async
+                            allowed = self._is_service_allowed(record)
+                            if hasattr(allowed, '__await__'): # Check if it's awaitable
+                                allowed = await allowed
 
-                        now = time.time()
-                        cached_entry = self._discovered_services_cache.get(record.id)
+                            if not allowed:
+                                self.logger.debug("mDNS discovered service filtered out by allowed_networks", service_id=record.id, endpoint=record.endpoint)
+                                mdns_queue.task_done()
+                                continue
 
-                        if cached_entry:
-                            _, last_seen_time = cached_entry
-                            self._discovered_services_cache[record.id] = (record, now)
-                            if (now - last_seen_time) < self.discovery_config.cache_ttl_seconds:
-                                self.logger.debug("mDNS service re-discovered, cache updated.", service_id=record.id)
-                            else:
-                                self.logger.info("mDNS service re-discovered after TTL, yielding again.", service_id=record.id)
+                            now = time.time()
+                            cached_entry = self._discovered_services_cache.get(record.id)
+
+                            if cached_entry:
+                                _, last_seen_time = cached_entry
+                                self._discovered_services_cache[record.id] = (record, now)
+                                if (now - last_seen_time) < self.discovery_config.cache_ttl_seconds:
+                                    self.logger.debug("mDNS service re-discovered, cache updated.", service_id=record.id)
+                                else:
+                                    self.logger.info("mDNS service re-discovered after TTL, yielding again.", service_id=record.id)
+                                    yield record
+                            else: # New discovery
+                                self._discovered_services_cache[record.id] = (record, now)
                                 yield record
-                        else: # New discovery
-                            self._discovered_services_cache[record.id] = (record, now)
-                            yield record
 
-                        mdns_queue.task_done()
-                    except asyncio.TimeoutError:
-                        if not browser.running:
-                            break
-                        continue
-            finally:
-                self.logger.info("mDNS discovery period ended or browser stopped. Cleaning up browser.")
-                await browser.async_cancel()
-                # aiozc will be closed automatically by async with
-
-            del self._mdns_internal_queue # Clean up queue reference
+                            mdns_queue.task_done()
+                        except asyncio.TimeoutError:
+                            if not browser.running: # browser might stop if aiozc is closed early
+                                break
+                            continue
+                finally:
+                    self.logger.info("mDNS discovery loop ended or browser stopped. Cleaning up browser.")
+                    if browser and hasattr(browser, 'async_cancel'): # Ensure browser exists and has method
+                         await browser.async_cancel()
+                    # aiozc will be closed automatically by async with
+        finally:
+            if hasattr(self, '_mdns_internal_queue'):
+                del self._mdns_internal_queue # Clean up queue reference
+                self.logger.debug("Cleaned up _mdns_internal_queue.")
             self.logger.info("mDNS discovery finalized.")
 
 
@@ -219,7 +228,7 @@ class MCPDiscoveryService:
         if False: # Keep Pyright happy about async generator
             yield
 
-    def _is_service_allowed(self, service_record: MCPServiceRecord) -> bool:
+    async def _is_service_allowed(self, service_record: MCPServiceRecord) -> bool:
         """Checks if the service's endpoint IP is within the allowed networks."""
         if not self.discovery_config.allowed_networks:
             return True # No filter means all are allowed
@@ -238,11 +247,10 @@ class MCPDiscoveryService:
                 # If endpoint_host is a hostname, try to resolve it
                 self.logger.debug("Endpoint host is not an IP, attempting DNS resolution for filtering", host=endpoint_host)
                 try:
-                    # This is a blocking call. For a fully async service, consider ai DNS resolution.
-                    # For now, keep it simple as this filtering is usually quick.
-                    # Get all addresses, try each one.
-                    addr_infos = socket.getaddrinfo(endpoint_host, None)
-                    resolved_ips = {ipaddress.ip_address(info[4][0]) for info in addr_infos}
+                    loop = asyncio.get_event_loop()
+                    # Use loop.getaddrinfo for async DNS resolution
+                    addr_infos = await loop.getaddrinfo(endpoint_host, None)
+                    resolved_ips = {ipaddress.ip_address(info[4][0]) for info in addr_infos if info[4]} # info[4] is the sockaddr
                     self.logger.debug("Resolved IPs for host", host=endpoint_host, ips=resolved_ips)
 
                     # Check if any resolved IP is in an allowed network
@@ -258,6 +266,10 @@ class MCPDiscoveryService:
                 except socket.gaierror as e:
                     self.logger.warning("DNS resolution failed for endpoint host", host=endpoint_host, error=str(e))
                     return False # Cannot determine if allowed if DNS fails
+                except Exception as e: # Catch other potential errors during async resolution
+                    self.logger.error("Unexpected error during async DNS resolution", host=endpoint_host, error=str(e))
+                    return False
+
 
             # If host_ip was already an IP address (no ValueError)
             for network_str in self.discovery_config.allowed_networks:

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, EmailStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,6 +39,15 @@ class OAuthClientDetails(BaseModel): # Remains BaseModel
     redirect_uri: Optional[HttpUrl] = Field(default="http://localhost:8080/oauth/callback", description="Default redirect URI for CLI flows.")
     scopes: List[str] = Field(default_factory=lambda: ["openid", "profile", "mcp:tools", "mcp:resources"])
 
+class DynamicClientRegistrationSettings(BaseModel):
+    """Settings for dynamic client registration metadata."""
+    client_name_suffix: Optional[str] = Field(None, description="Optional suffix to append to the auto-generated client name during dynamic registration. e.g., 'MyOrg'.")
+    client_uri: Optional[HttpUrl] = Field(None, description="URL of the home page of the client application.")
+    logo_uri: Optional[HttpUrl] = Field(None, description="URL that references a logo for the client application.")
+    contacts: Optional[List[EmailStr]] = Field(None, description="List of e-mail addresses (must be valid format) for human support for the client.")
+    # policy_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand how the client uses data.")
+    # tos_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand terms of service.")
+
 class AuthConfig(BaseModel): # Remains BaseModel
     """Configuration for authentication."""
 
@@ -47,21 +56,12 @@ class AuthConfig(BaseModel): # Remains BaseModel
     oauth_dynamic_client_registration: bool = Field(default=True, description="Enable dynamic client registration.")
     oauth_redirect_uri_port: int = Field(default=8080, description="Default port for localhost redirect URI.")
 
-    dynamic_client_metadata: "DynamicClientRegistrationSettings" = Field(default_factory=lambda: DynamicClientRegistrationSettings(), description="Metadata to use for dynamic client registration.")
+    dynamic_client_metadata: DynamicClientRegistrationSettings = Field(default_factory=lambda: DynamicClientRegistrationSettings(), description="Metadata to use for dynamic client registration.")
 
     preconfigured_credentials_file: Optional[Path] = Field(None, description="Path to pre-configured credentials file.")
     token_storage_method: str = Field(default="keyring", description="Method for storing tokens ('keyring', 'file').")
     keyring_service_name: str = Field(default="mcp_vacuum_tokens", description="Service name for keyring storage.")
     encrypted_token_file_path: Optional[Path] = Field(None, description="Path for encrypted token file.")
-
-class DynamicClientRegistrationSettings(BaseModel):
-    """Settings for dynamic client registration metadata."""
-    client_name_suffix: Optional[str] = Field(None, description="Optional suffix to append to the auto-generated client name during dynamic registration. e.g., 'MyOrg'.")
-    client_uri: Optional[HttpUrl] = Field(None, description="URL of the home page of the client application.")
-    logo_uri: Optional[HttpUrl] = Field(None, description="URL that references a logo for the client application.")
-    contacts: Optional[List[str]] = Field(None, description="List of e-mail addresses for human support for the client.") # Pydantic EmailStr could be used for validation
-    # policy_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand how the client uses data.")
-    # tos_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand terms of service.")
 
 
 class LoggingConfig(BaseModel): # Remains BaseModel
