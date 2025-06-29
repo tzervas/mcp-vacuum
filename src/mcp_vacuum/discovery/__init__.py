@@ -18,4 +18,4 @@ __all__ = [
     # "ARPScanner",
     # "ConcurrentScanner",
     # "TTLCache",
-]
+]  # type: list[str]

@@ -3,8 +3,8 @@ Base class for all MCP Vacuum agents using the Google ADK.
 """
 from typing import Any
 
-import structlog
-from google_adk import BaseAgent  # Assuming google_adk provides BaseAgent like this
+import structlog  # type: ignore[import-not-found]
+from google_adk import BaseAgent  # type: ignore[import-not-found]
 
 # Or: from adk import BaseAgent if adk is top-level
 from ..config import Config

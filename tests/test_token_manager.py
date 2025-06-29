@@ -5,7 +5,7 @@ import asyncio
 import time
 from unittest.mock import AsyncMock, patch
 
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 from mcp_vacuum.auth.dynamic_registration import (
     DynamicClientRegistrar,
@@ -25,7 +25,7 @@ from mcp_vacuum.models.mcp import (  # MCPServerInfo is used by TokenManager
 
 
 @pytest.fixture
-def app_config():
+def app_config() -> Config:
     # Configure default OAuth client details for tests, so _get_oauth_client_config can work
     default_oauth_details = AppOAuthClientDetails(
         client_id="default_test_client_id",
@@ -37,7 +37,7 @@ def app_config():
     return Config(auth=auth_cfg)
 
 @pytest.fixture
-def mock_token_storage():
+def mock_token_storage() -> AsyncMock:
     storage = AsyncMock(spec=BaseTokenStorage)
     storage.get_oauth_token = AsyncMock(return_value=None)
     storage.store_oauth_token = AsyncMock()

@@ -4,9 +4,8 @@ OAuth 2.1 Dynamic Client Registration (RFC 7591).
 import json
 from typing import Any
 
-import aiohttp
-import structlog
-
+import aiohttp  # type: ignore[import-not-found]
+import structlog  # type: ignore[import-not-found]
 from .. import __version__ as app_version  # Get app version
 from ..config import Config  # For global app config, http client settings
 from ..mcp_client.exceptions import (  # Reusing exceptions

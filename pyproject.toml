@@ -32,6 +32,10 @@ dev = [
     "ruff>=0.2.0",
     "mypy>=1.8.0",
     "bandit>=1.7.7",
+    "types-click>=7.1.8", # Added
+    "types-cryptography>=3.3.23.2", # Added
+    # Attempting one more common types package to test uv's capability
+    # "types-aiobotocore", # Placeholder for testing - will remove if it causes issues
 ]
 
 [project.urls]

@@ -4,8 +4,8 @@ Unit tests for HTTPMCPClient.
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import aiohttp
-import pytest
+import aiohttp  # type: ignore[import-not-found]
+import pytest  # type: ignore[import-not-found]
 
 from mcp_vacuum.config import Config, MCPClientConfig
 from mcp_vacuum.mcp_client.exceptions import (

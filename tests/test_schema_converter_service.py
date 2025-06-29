@@ -2,7 +2,7 @@
 Unit tests for SchemaConverterService.
 """
 
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 from mcp_vacuum.config import Config
 from mcp_vacuum.models.common import RiskLevel, ToolCategory
@@ -15,16 +15,16 @@ from mcp_vacuum.schema_gen.schema_converter_service import (
 
 
 @pytest.fixture
-def app_config():
+def app_config() -> Config:
     # Add agent_version to config for testing metadata
     return Config(agent_version="test-v0.1")
 
 @pytest.fixture
-def converter_service(app_config):
+def converter_service(app_config: Config) -> SchemaConverterService:
     return SchemaConverterService(app_config=app_config)
 
 @pytest.fixture
-def sample_mcp_tool():
+def sample_mcp_tool() -> MCPTool:
     return MCPTool(
         name="My.Example-Tool_1",
         description="This is a test tool that does amazing things.",
@@ -48,7 +48,7 @@ def sample_mcp_tool():
     )
 
 @pytest.fixture
-def sample_server_info():
+def sample_server_info() -> MCPServerInfo:
     return MCPServerInfo(
         id="server-guid-123",
         name="PrimaryMCP",
@@ -58,7 +58,7 @@ def sample_server_info():
 
 # --- Test Helper Methods ---
 
-def test_sanitize_k8s_name(converter_service: SchemaConverterService):
+def test_sanitize_k8s_name(converter_service: SchemaConverterService) -> None:
     assert converter_service._sanitize_k8s_name("My.Tool_Name!") == "my-tool-name"
     assert converter_service._sanitize_k8s_name("123Tool-Name") == "123tool-name" # Starts with num is ok
     assert converter_service._sanitize_k8s_name("tool-name-") == "tool-name" # Trailing hyphen
@@ -70,7 +70,7 @@ def test_sanitize_k8s_name(converter_service: SchemaConverterService):
     assert converter_service._sanitize_k8s_name("tool_with_underscores") == "tool-with-underscores"
 
 
-def test_to_camel_case(converter_service: SchemaConverterService):
+def test_to_camel_case(converter_service: SchemaConverterService) -> None:
     assert converter_service._to_camel_case("snake_case_example") == "snakeCaseExample"
     assert converter_service._to_camel_case("kebab-case-example") == "kebabCaseExample"
     assert converter_service._to_camel_case("alreadyCamelCase") == "alreadyCamelCase"
@@ -82,7 +82,9 @@ def test_to_camel_case(converter_service: SchemaConverterService):
 
 # --- Test Categorization and Risk Assessment (Basic) ---
 
-def test_categorize_tool(converter_service: SchemaConverterService, sample_mcp_tool):
+def test_categorize_tool(
+    converter_service: SchemaConverterService, sample_mcp_tool: MCPTool
+) -> None:
     # Based on current simple logic in service
     assert converter_service._categorize_tool(sample_mcp_tool) == ToolCategory.UNKNOWN # Default fallback
 
@@ -93,7 +95,7 @@ def test_categorize_tool(converter_service: SchemaConverterService, sample_mcp_t
     assert converter_service._categorize_tool(tool_http) == ToolCategory.NETWORK_ACCESS
 
 
-def test_assess_risk_level(converter_service: SchemaConverterService):
+def test_assess_risk_level(converter_service: SchemaConverterService) -> None:
     tool_cmd = MCPTool(name="RunCommand", description="Executes a shell command.", input_schema={})
     cat_cmd = converter_service._categorize_tool(tool_cmd) # Expected SYSTEM_COMMANDS
     assert converter_service._assess_risk_level(tool_cmd, cat_cmd) == RiskLevel.CRITICAL
@@ -118,7 +120,12 @@ def test_assess_risk_level(converter_service: SchemaConverterService):
     ({"type": "string", "description": "A simple string input"}, None), # Also non-object input.
     ({"type": "object", "properties": {}}, {}), # Empty properties
 ])
-def test_transform_json_schema_to_k8s_crd_input_params(converter_service: SchemaConverterService, mcp_schema, expected_k8s_props, sample_mcp_tool):
+def test_transform_json_schema_to_k8s_crd_input_params(
+    converter_service: SchemaConverterService,
+    mcp_schema: dict[str, Any],
+    expected_k8s_props: dict[str, Any] | None,
+    sample_mcp_tool: MCPTool,
+) -> None:
     """Test input schema transformation (must result in an object schema for parameters)."""
     kagent_schema = converter_service._transform_json_schema_to_k8s_crd(mcp_schema, is_output_schema=False, mcp_tool_name=sample_mcp_tool.name)
 
@@ -130,7 +137,9 @@ def test_transform_json_schema_to_k8s_crd_input_params(converter_service: Schema
         assert kagent_schema.properties == {}
 
 
-def test_transform_json_schema_to_k8s_crd_output_schema(converter_service: SchemaConverterService, sample_mcp_tool):
+def test_transform_json_schema_to_k8s_crd_output_schema(
+    converter_service: SchemaConverterService, sample_mcp_tool: MCPTool
+) -> None:
     """Test output schema transformation (can be non-object)."""
     mcp_output_string = {"type": "string", "description": "The result is a string."}
     kagent_output_string = converter_service._transform_json_schema_to_k8s_crd(mcp_output_string, is_output_schema=True, mcp_tool_name=sample_mcp_tool.name)
@@ -147,7 +156,11 @@ def test_transform_json_schema_to_k8s_crd_output_schema(converter_service: Schem
 # --- Test Main Conversion Method (convert_mcp_tool_to_kagent) ---
 
 @pytest.mark.asyncio
-async def test_convert_mcp_tool_to_kagent_success(converter_service: SchemaConverterService, sample_mcp_tool, sample_server_info):
+async def test_convert_mcp_tool_to_kagent_success(
+    converter_service: SchemaConverterService,
+    sample_mcp_tool: MCPTool,
+    sample_server_info: MCPServerInfo,
+) -> None:
     result: ConversionServiceResult = await converter_service.convert_mcp_tool_to_kagent(sample_mcp_tool, sample_server_info)
 
     assert result.kagent_tool is not None
@@ -193,7 +206,9 @@ async def test_convert_mcp_tool_to_kagent_success(converter_service: SchemaConve
 
 
 @pytest.mark.asyncio
-async def test_convert_mcp_tool_input_schema_not_object(converter_service: SchemaConverterService, sample_server_info):
+async def test_convert_mcp_tool_input_schema_not_object(
+    converter_service: SchemaConverterService, sample_server_info: MCPServerInfo
+) -> None:
     """Test conversion when MCP input schema is not an object."""
     tool_string_input = MCPTool(
         name="StringTool",

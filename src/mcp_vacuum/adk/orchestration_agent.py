@@ -6,7 +6,7 @@ import asyncio
 import logging as py_logging
 from typing import Any
 
-import structlog
+import structlog  # type: ignore[import-not-found]
 
 from ..config import Config
 from .auth_agent import AuthenticationAgent, AuthResultEvent

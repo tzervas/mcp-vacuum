@@ -4,7 +4,7 @@ Unit tests for DiscoveryAgent.
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 from mcp_vacuum.adk.discovery_agent import DiscoveredServerEvent, DiscoveryAgent
 from mcp_vacuum.config import Config, DiscoveryConfig

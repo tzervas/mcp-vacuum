@@ -7,7 +7,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-import click
+import click  # type: ignore[import-not-found]
 
 from mcp_vacuum import __version__
 from mcp_vacuum.adk.orchestration_agent import \

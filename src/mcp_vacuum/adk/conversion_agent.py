@@ -3,7 +3,7 @@ ConversionAgent: Handles schema conversion from MCP format to Kagent format.
 """
 import asyncio
 
-import structlog
+import structlog  # type: ignore[import-not-found]
 
 from ..adk.base import MCPVacuumBaseAgent
 from ..config import Config

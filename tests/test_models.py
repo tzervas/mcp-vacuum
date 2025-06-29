@@ -3,8 +3,8 @@ Unit tests for Pydantic models in src/mcp_vacuum/models/
 """
 import time
 
-import pytest
-from pydantic import ValidationError
+import pytest  # type: ignore[import-not-found]
+from pydantic import ValidationError # type: ignore[import-not-found]
 
 from mcp_vacuum.models.auth import (
     OAuth2Token,
@@ -34,7 +34,7 @@ from mcp_vacuum.models.mcp import (
 
 # --- Auth Models Tests ---
 
-def test_oauth2token_is_expired():
+def test_oauth2token_is_expired() -> None:
     """Test OAuth2Token.is_expired property."""
     # Token created now, expires in 1 hour (3600s)
     token_valid = OAuth2Token(access_token="valid_token", expires_in=3600)
@@ -68,7 +68,7 @@ def test_oauth2token_is_expired():
     assert token_with_expires_at.expires_at == pytest.approx(current_time + 1000)
 
 
-def test_pkce_challenge_validation():
+def test_pkce_challenge_validation() -> None:
     """Test PKCEChallenge model validation (though it's mostly for data holding)."""
     pkce = PKCEChallenge(code_verifier="v", code_challenge="c", code_challenge_method="S256")
     assert pkce.code_verifier == "v" # Pydantic performs basic assignment checks
@@ -78,7 +78,7 @@ def test_pkce_challenge_validation():
 
 # --- MCP Models Tests ---
 
-def test_mcp_service_record_creation():
+def test_mcp_service_record_creation() -> None:
     """Test basic creation and HttpUrl validation for MCPServiceRecord."""
     record = MCPServiceRecord(
         id="server1", name="Test Server", endpoint="http://localhost:8080",
@@ -91,7 +91,7 @@ def test_mcp_service_record_creation():
     with pytest.raises(ValidationError):
         MCPServiceRecord(id="s2", name="Bad Endpoint", endpoint="not_a_url", discovery_method="test")
 
-def test_mcp_tool_creation():
+def test_mcp_tool_creation() -> None:
     """Test MCPTool creation with required schema fields."""
     tool = MCPTool(
         name="calculator.add",
@@ -108,7 +108,7 @@ def test_mcp_tool_creation():
 
 # --- Kagent Models Tests ---
 
-def test_kagent_tool_creation():
+def test_kagent_tool_creation() -> None:
     """Test KagentTool creation with nested models."""
     metadata = KagentMetadata(name="my-kagent-tool", labels={"category": "math"})
     input_params_schema = KagentCRDSchema(type="object", properties={"x": {"type": "integer"}})
@@ -119,7 +119,7 @@ def test_kagent_tool_creation():
     assert ktool.spec.parameters.properties["x"]["type"] == "integer"
     assert ktool.api_version == "tools.kagent.ai/v1" # Default value
 
-def test_kagent_crd_schema_extra_fields():
+def test_kagent_crd_schema_extra_fields() -> None:
     """Test KagentCRDSchema allows extra fields (as JSON schema can be flexible)."""
     schema_data = {
         "type": "object",
@@ -134,7 +134,7 @@ def test_kagent_crd_schema_extra_fields():
 
 # --- Common Models Tests ---
 
-def test_enum_usage_in_models():
+def test_enum_usage_in_models() -> None:
     """Test that enums are correctly used and validated in models."""
     # Example using MCPServiceRecord with AuthMethod enum
     record = MCPServiceRecord(
@@ -150,12 +150,12 @@ def test_enum_usage_in_models():
             auth_method="invalid_auth_method", discovery_method="test"
         )
 
-def test_mcp_capability_type():
+def test_mcp_capability_type() -> None:
     cap = MCPCapability(type=MCPCapabilityType.TOOLS, details={"tool_names": ["tool1"]})
     assert cap.type == MCPCapabilityType.TOOLS
 
 # --- Model Field Defaults ---
-def test_model_field_defaults():
+def test_model_field_defaults() -> None:
     """Test default values for various model fields."""
     auth_meta_def = AuthenticationMetadata(method=AuthMethod.NONE) # Only required field
     assert auth_meta_def.scopes_supported is None
@@ -171,7 +171,7 @@ def test_model_field_defaults():
     assert ktool_def.kind == "Tool"
 
 # --- ValidationResult and ValidationIssue ---
-def test_validation_result():
+def test_validation_result() -> None:
     vr_ok = ValidationResult(is_valid=True, issues=[])
     assert not vr_ok.has_errors
 

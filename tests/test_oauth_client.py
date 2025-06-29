@@ -5,7 +5,8 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
-import pytest
+import pytest  # type: ignore[import-not-found]
+import aiohttp  # type: ignore[import-not-found]
 
 from mcp_vacuum.auth.oauth_client import OAuth2Client
 from mcp_vacuum.auth.pkce import generate_pkce_challenge_pair

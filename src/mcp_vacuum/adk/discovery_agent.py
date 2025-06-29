@@ -3,7 +3,7 @@ DiscoveryAgent: Responsible for discovering MCP servers on the network.
 """
 import asyncio
 
-import structlog
+import structlog  # type: ignore[import-not-found]
 
 from ..config import Config
 from ..discovery.discovery_service import MCPDiscoveryService

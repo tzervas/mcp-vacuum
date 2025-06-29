@@ -7,8 +7,8 @@ import json
 import re
 from typing import Any
 
-import structlog
-from pydantic import BaseModel, Field
+import structlog  # type: ignore[import-not-found]
+from pydantic import BaseModel, Field  # type: ignore[import-not-found]
 
 from ..config import Config  # For any conversion-related configs if added later
 from ..models.common import RiskLevel, ToolCategory  # Enums for categorization

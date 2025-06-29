@@ -8,9 +8,9 @@ import socket
 import time  # For TTL cache
 from collections.abc import AsyncGenerator
 
-import structlog
-from zeroconf import ServiceStateChange, Zeroconf
-from zeroconf.asyncio import AsyncServiceBrowser, AsyncServiceInfo, AsyncZeroconf
+import structlog  # type: ignore[import-not-found]
+from zeroconf import ServiceStateChange, Zeroconf  # type: ignore[import-not-found]
+from zeroconf.asyncio import AsyncServiceBrowser, AsyncServiceInfo, AsyncZeroconf  # type: ignore[import-not-found]
 
 from ..config import Config, DiscoveryConfig
 from ..models.common import (  # Assuming these are relevant for initial record

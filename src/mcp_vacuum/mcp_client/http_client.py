@@ -4,8 +4,8 @@ MCP Client implementation using HTTP/HTTPS transport.
 import json
 from typing import Any
 
-import aiohttp
-import structlog  # Import structlog
+import aiohttp  # type: ignore[import-not-found]
+import structlog  # type: ignore[import-not-found]
 
 from ..config import Config
 from ..models.mcp import MCPServiceRecord

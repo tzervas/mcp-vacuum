@@ -3,7 +3,7 @@ Unit tests for TokenStorage implementations.
 """
 from unittest.mock import MagicMock, patch
 
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 from mcp_vacuum.auth.token_storage import (
     KeyringTokenStorage,

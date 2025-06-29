@@ -3,8 +3,8 @@ MCPClientAgent: Manages communication with individual MCP servers.
 """
 from typing import Any
 
-import aiohttp  # For shared ClientSession
-import structlog
+import aiohttp  # type: ignore[import-not-found]
+import structlog  # type: ignore[import-not-found]
 
 from ..adk.base import MCPVacuumBaseAgent
 from ..config import Config

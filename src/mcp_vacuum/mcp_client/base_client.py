@@ -8,8 +8,8 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
-import aiohttp
-
+import aiohttp  # type: ignore[import-not-found]
+import structlog # Added import for structlog
 from ..config import Config, MCPClientConfig  # MCPClientConfig for CB settings
 from ..models.auth import OAuth2Token
 from ..models.mcp import MCPServiceRecord

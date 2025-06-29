@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from enum import Enum
 from typing import Any
 
-import structlog
+import structlog  # type: ignore[import-not-found]
 
 logger = structlog.get_logger(__name__)
 
