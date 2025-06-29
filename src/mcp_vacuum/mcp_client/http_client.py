@@ -1,18 +1,21 @@
 """
 MCP Client implementation using HTTP/HTTPS transport.
 """
-import asyncio
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 import aiohttp
-import structlog # Import structlog
+import structlog  # Import structlog
 
-from .base_client import BaseMCPClient, generate_jsonrpc_request
-from .exceptions import MCPConnectionError, MCPTimeoutError, MCPProtocolError, MCPAuthError
-from ..models.mcp import MCPServiceRecord
-from ..models.auth import OAuth2Token
 from ..config import Config
+from ..models.mcp import MCPServiceRecord
+from .base_client import BaseMCPClient
+from .exceptions import (
+    MCPAuthError,
+    MCPConnectionError,
+    MCPProtocolError,
+    MCPTimeoutError,
+)
 
 logger = structlog.get_logger(__name__) # Initialize logger at module level
 
@@ -22,7 +25,7 @@ class HTTPMCPClient(BaseMCPClient):
     It uses aiohttp.ClientSession for making asynchronous HTTP requests.
     """
 
-    def __init__(self, service_record: MCPServiceRecord, config: Config, aiohttp_session: Optional[aiohttp.ClientSession] = None):
+    def __init__(self, service_record: MCPServiceRecord, config: Config, aiohttp_session: aiohttp.ClientSession | None = None):
         super().__init__(service_record, config, aiohttp_session)
         self._is_connected_status = False # For HTTP, connection is per-request, but we can simulate a state.
         self.logger = logger.bind(server_name=service_record.name, server_endpoint=str(service_record.endpoint), transport="http")
@@ -110,9 +113,9 @@ class HTTPMCPClient(BaseMCPClient):
             return True # Session is open and ready
         return self._is_connected_status # Fallback to simulated status
 
-    async def _send_request_raw(self, request_payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _send_request_raw(self, request_payload: dict[str, Any]) -> dict[str, Any]:
         session = await self._get_session()
-        from .. import __version__ # Dynamically import version
+        from .. import __version__  # Dynamically import version
 
         headers = {
             "Content-Type": "application/json",
@@ -166,7 +169,7 @@ class HTTPMCPClient(BaseMCPClient):
         except aiohttp.ClientConnectorError as e:
             self.logger.error("Client connector error", error_os_error=e.os_error, error_str=str(e))
             raise MCPConnectionError(f"Connection failed to {self.service_record.endpoint}: {e.os_error or str(e)}") from e
-        except asyncio.TimeoutError as e: # Catches aiohttp.ServerTimeoutError, ClientTimeoutError
+        except TimeoutError as e: # Catches aiohttp.ServerTimeoutError, ClientTimeoutError
             self.logger.error("Request timed out", endpoint=str(self.service_record.endpoint), timeout_total=request_timeout_seconds)
             raise MCPTimeoutError(f"Request to {self.service_record.endpoint} timed out after {request_timeout_seconds}s.") from e
         except aiohttp.ClientError as e: # Catch other aiohttp client errors
@@ -175,13 +178,13 @@ class HTTPMCPClient(BaseMCPClient):
 
 
     # Example of a non-JSONRPC HTTP GET method, if needed for /capabilities
-    async def get_http_capabilities(self) -> Dict[str, Any]:
+    async def get_http_capabilities(self) -> dict[str, Any]:
         """
         Fetches capabilities from a dedicated HTTP GET endpoint (e.g., /capabilities),
         if the server provides one outside of JSONRPC.
         """
         session = await self._get_session()
-        from .. import __version__ # Dynamically import version
+        from .. import __version__  # Dynamically import version
         headers = {"Accept": "application/json", "User-Agent": f"MCPVacuumAgent/{__version__} ({self.config.agent_name})"}
         if self._current_token:
             headers["Authorization"] = f"Bearer {self._current_token.access_token}"
@@ -207,7 +210,7 @@ class HTTPMCPClient(BaseMCPClient):
                 else:
                     self.logger.warning("Failed to get /capabilities", status=response.status, reason=response.reason, response_body=response_text[:500])
                     raise MCPConnectionError(f"Failed to fetch capabilities from {capabilities_url}: HTTP {response.status}")
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             self.logger.error("Timeout fetching /capabilities", url=capabilities_url)
             raise MCPTimeoutError(f"Request to {capabilities_url} timed out.") from e
         except aiohttp.ClientError as e:

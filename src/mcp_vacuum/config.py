@@ -2,9 +2,8 @@
 
 import json
 from pathlib import Path
-from typing import List, Optional
 
-from pydantic import BaseModel, Field, HttpUrl, EmailStr
+from pydantic import BaseModel, EmailStr, Field, HttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,52 +15,52 @@ class DiscoveryConfig(BaseModel): # Remains BaseModel, nested under Config (Base
     max_concurrent_scans: int = Field(default=50, ge=1, le=200, description="Maximum concurrent discovery operations or host scans.")
 
     enable_mdns: bool = Field(default=True, description="Enable mDNS/DNS-SD discovery.")
-    mdns_service_types: List[str] = Field(default_factory=lambda: ["_mcp._tcp.local."], description="mDNS service types to query.")
+    mdns_service_types: list[str] = Field(default_factory=lambda: ["_mcp._tcp.local."], description="mDNS service types to query.")
 
     enable_ssdp: bool = Field(default=True, description="Enable SSDP/UPnP discovery.")
     ssdp_search_target: str = Field(default="urn:schemas-mcp-org:device:MCPServer:1", description="SSDP search target (ST) for MCP servers.")
 
     enable_arp_scan: bool = Field(default=False, description="Enable ARP scanning (requires privileges).")
-    arp_scan_networks: List[str] = Field(default_factory=list, description="Networks to ARP scan if enabled (e.g., ['192.168.1.0/24']). If empty, tries to infer from interfaces.")
+    arp_scan_networks: list[str] = Field(default_factory=list, description="Networks to ARP scan if enabled (e.g., ['192.168.1.0/24']). If empty, tries to infer from interfaces.")
 
-    target_networks: List[str] = Field(default_factory=list, description="Explicit target networks/IP ranges to scan (e.g., ['192.168.1.0/24', '10.0.0.5']). Supplements ARP/interface-based discovery.")
-    network_interfaces: List[str] = Field(default_factory=list, description="Specific network interfaces to use for discovery (e.g., ['eth0', 'wlan0']). If empty, tries to use all suitable.")
+    target_networks: list[str] = Field(default_factory=list, description="Explicit target networks/IP ranges to scan (e.g., ['192.168.1.0/24', '10.0.0.5']). Supplements ARP/interface-based discovery.")
+    network_interfaces: list[str] = Field(default_factory=list, description="Specific network interfaces to use for discovery (e.g., ['eth0', 'wlan0']). If empty, tries to use all suitable.")
 
     cache_ttl_seconds: int = Field(default=300, ge=10, le=3600, description="TTL for discovered service cache in seconds.")
-    allowed_networks: List[str] = Field(default_factory=list, description="List of allowed network ranges (CIDR format) for discovered services. If empty, all are allowed.")
+    allowed_networks: list[str] = Field(default_factory=list, description="List of allowed network ranges (CIDR format) for discovered services. If empty, all are allowed.")
 
 class DynamicClientRegistrationSettings(BaseModel):
     """Settings for dynamic client registration metadata."""
-    client_name_suffix: Optional[str] = Field(None, description="Optional suffix to append to the auto-generated client name during dynamic registration. e.g., 'MyOrg'.")
-    client_uri: Optional[HttpUrl] = Field(None, description="URL of the home page of the client application.")
-    logo_uri: Optional[HttpUrl] = Field(None, description="URL that references a logo for the client application.")
-    contacts: List[EmailStr] = Field(default_factory=list, description="Contact email addresses for the client (must be valid emails).")
+    client_name_suffix: str | None = Field(None, description="Optional suffix to append to the auto-generated client name during dynamic registration. e.g., 'MyOrg'.")
+    client_uri: HttpUrl | None = Field(None, description="URL of the home page of the client application.")
+    logo_uri: HttpUrl | None = Field(None, description="URL that references a logo for the client application.")
+    contacts: list[EmailStr] = Field(default_factory=list, description="Contact email addresses for the client (must be valid emails).")
     # policy_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand how the client uses data.")
     # tos_uri: Optional[HttpUrl] = Field(None, description="URL that client developers can Read to understand terms of service.")
 
 class OAuthClientDetails(BaseModel): # Remains BaseModel
     """Details for a pre-configured OAuth client."""
     client_id: str
-    client_secret: Optional[str] = None
-    authorization_endpoint: Optional[HttpUrl] = None
-    token_endpoint: Optional[HttpUrl] = None
-    redirect_uri: Optional[HttpUrl] = Field(default="http://localhost:8080/oauth/callback", description="Default redirect URI for CLI flows.")
-    scopes: List[str] = Field(default_factory=lambda: ["openid", "profile", "mcp:tools", "mcp:resources"])
+    client_secret: str | None = None
+    authorization_endpoint: HttpUrl | None = None
+    token_endpoint: HttpUrl | None = None
+    redirect_uri: HttpUrl | None = Field(default="http://localhost:8080/oauth/callback", description="Default redirect URI for CLI flows.")
+    scopes: list[str] = Field(default_factory=lambda: ["openid", "profile", "mcp:tools", "mcp:resources"])
 
 class AuthConfig(BaseModel): # Remains BaseModel
     """Configuration for authentication."""
 
     default_auth_method: str = Field(default="oauth2_pkce", description="Default authentication method to try.")
-    oauth_default_client: Optional[OAuthClientDetails] = Field(None, description="Default OAuth client credentials.")
+    oauth_default_client: OAuthClientDetails | None = Field(None, description="Default OAuth client credentials.")
     oauth_dynamic_client_registration: bool = Field(default=True, description="Enable dynamic client registration.")
     oauth_redirect_uri_port: int = Field(default=8080, description="Default port for localhost redirect URI.")
 
     dynamic_client_metadata: DynamicClientRegistrationSettings = Field(default_factory=lambda: DynamicClientRegistrationSettings(), description="Metadata to use for dynamic client registration.")
 
-    preconfigured_credentials_file: Optional[Path] = Field(None, description="Path to pre-configured credentials file.")
+    preconfigured_credentials_file: Path | None = Field(None, description="Path to pre-configured credentials file.")
     token_storage_method: str = Field(default="keyring", description="Method for storing tokens ('keyring', 'file').")
     keyring_service_name: str = Field(default="mcp_vacuum_tokens", description="Service name for keyring storage.")
-    encrypted_token_file_path: Optional[Path] = Field(None, description="Path for encrypted token file.")
+    encrypted_token_file_path: Path | None = Field(None, description="Path for encrypted token file.")
 
 
 class LoggingConfig(BaseModel): # Remains BaseModel
@@ -69,7 +68,7 @@ class LoggingConfig(BaseModel): # Remains BaseModel
 
     level: str = Field(default="INFO", description="Log level")
     format: str = Field(default="json", description="Log format")
-    file: Optional[Path] = Field(default=None, description="Log file path")
+    file: Path | None = Field(default=None, description="Log file path")
 
 class SecurityConfig(BaseModel): # Remains BaseModel
     """Configuration for security settings."""

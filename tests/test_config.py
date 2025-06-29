@@ -1,11 +1,8 @@
 """Tests for configuration module."""
 
-import os
-from pathlib import Path
 
-import pytest
 
-from mcp_vacuum.config import Config, DiscoveryConfig, AuthConfig
+from mcp_vacuum.config import Config
 
 
 def test_config_from_env(monkeypatch):
@@ -23,7 +20,7 @@ def test_config_from_env(monkeypatch):
 
     # With pydantic-settings, Config() directly loads from env vars
     config = Config()
-    
+
     assert config.logging.level == "DEBUG"
     assert config.agent_name == "TestAgent"
     assert config.discovery.timeout_seconds == 45
@@ -37,7 +34,7 @@ def test_config_from_env(monkeypatch):
 def test_config_defaults():
     """Test default configuration values for new and existing fields."""
     config = Config()
-    
+
     # DiscoveryConfig defaults
     assert config.discovery.timeout_seconds == 30
     assert config.discovery.scan_timeout_seconds == 5.0
@@ -120,7 +117,7 @@ def test_config_from_file(tmp_path):
     assert str(config.auth.encrypted_token_file_path) == "/tmp/tokens.enc"
     assert config.mcp_client.max_retries == 2
     assert config.mcp_client.ssl_verify is False
-    
+
     # Check that unspecified fields retain defaults
     assert config.discovery.enable_mdns is True # Default
     assert config.security.require_auth is True # Default

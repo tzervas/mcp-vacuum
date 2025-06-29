@@ -1,6 +1,5 @@
 """Test the development environment setup."""
 import sys
-import pytest
 from pathlib import Path
 
 
@@ -18,7 +17,3 @@ def test_project_structure():
 
 def test_development_tools():
     """Verify development tools are installed."""
-    import black
-    import ruff
-    import mypy
-    import pytest

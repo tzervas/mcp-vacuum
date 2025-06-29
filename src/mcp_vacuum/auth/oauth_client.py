@@ -4,16 +4,26 @@ Adheres to RFC 6749 (OAuth 2.0), RFC 7636 (PKCE), and elements of OAuth 2.1 draf
 """
 import asyncio
 import json
-from typing import Any, Dict, Optional, Tuple, Union
-from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import aiohttp
 import structlog
 
-from ..models.auth import OAuth2Token, PKCEChallenge, OAuth2ClientConfig, TokenRequest, AuthorizationCodeResponse, OAuthError
-from ..mcp_client.exceptions import MCPAuthError, MCPConnectionError # Reusing connection error
+from ..config import (
+    Config,  # For global app config, if needed for session or http client settings
+)
+from ..mcp_client.exceptions import (  # Reusing connection error
+    MCPAuthError,
+    MCPConnectionError,
+)
+from ..models.auth import (
+    OAuth2ClientConfig,
+    OAuth2Token,
+    OAuthError,
+    PKCEChallenge,
+    TokenRequest,
+)
 from .pkce import generate_pkce_challenge_pair
-from ..config import Config # For global app config, if needed for session or http client settings
 
 logger = structlog.get_logger(__name__)
 
@@ -22,7 +32,7 @@ class OAuth2Client:
     An OAuth 2.1 client capable of performing the Authorization Code Flow with PKCE.
     """
 
-    def __init__(self, client_config: OAuth2ClientConfig, app_config: Config, session: Optional[aiohttp.ClientSession] = None):
+    def __init__(self, client_config: OAuth2ClientConfig, app_config: Config, session: aiohttp.ClientSession | None = None):
         """
         Initializes the OAuth2 client.
 
@@ -69,7 +79,7 @@ class OAuth2Client:
             await self._session.close()
         self._session = None
 
-    def create_authorization_url(self, state: str, pkce: PKCEChallenge, extra_params: Optional[Dict[str, str]] = None) -> Tuple[str, str, str]:
+    def create_authorization_url(self, state: str, pkce: PKCEChallenge, extra_params: dict[str, str] | None = None) -> tuple[str, str, str]:
         """
         Creates the authorization URL to redirect the user to.
 
@@ -99,12 +109,12 @@ class OAuth2Client:
 
         # Ensure no None values are in params before urlencode
         encoded_params = urlencode({k: v for k, v in params.items() if v is not None})
-        auth_url = f"{str(self.client_config.authorization_endpoint)}?{encoded_params}"
+        auth_url = f"{self.client_config.authorization_endpoint!s}?{encoded_params}"
 
         self.logger.info("Authorization URL created", url_host=urlparse(auth_url).hostname)
         return auth_url, state, pkce.code_verifier
 
-    async def exchange_code_for_token(self, code: str, code_verifier: str, state: Optional[str] = None, expected_state: Optional[str] = None) -> OAuth2Token:
+    async def exchange_code_for_token(self, code: str, code_verifier: str, state: str | None = None, expected_state: str | None = None) -> OAuth2Token:
         """
         Exchanges an authorization code for an access token and refresh token.
 
@@ -189,7 +199,7 @@ class OAuth2Client:
         except aiohttp.ClientConnectorError as e:
             self.logger.error("Token endpoint connection failed", error=str(e.os_error or e))
             raise MCPConnectionError(f"Connection to token endpoint {self.client_config.token_endpoint} failed: {e.os_error or str(e)}") from e
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             self.logger.error("Token request timed out", token_url=str(self.client_config.token_endpoint))
             raise MCPConnectionError(f"Request to token endpoint {self.client_config.token_endpoint} timed out.") from e
         except aiohttp.ClientError as e:
@@ -255,7 +265,7 @@ class OAuth2Client:
                         if oauth_error.error == "invalid_grant":
                              raise MCPAuthError(f"Token refresh failed: {oauth_error.error} - {oauth_error.error_description or 'Refresh token likely invalid/revoked'}. Re-authentication required.", server_error=oauth_error, requires_reauth=True)
                         raise MCPAuthError(f"Token refresh failed: {oauth_error.error} - {oauth_error.error_description or 'No description'}", server_error=oauth_error)
-                    except (json.JSONDecodeError, ValueError) as e:
+                    except (json.JSONDecodeError, ValueError):
                          raise MCPAuthError(f"Token refresh failed with status {response.status}. Response: {response_text[:500]}")
 
                 try:
@@ -279,7 +289,7 @@ class OAuth2Client:
         except aiohttp.ClientConnectorError as e:
             self.logger.error("Token refresh endpoint connection failed", error=str(e.os_error or e))
             raise MCPConnectionError(f"Connection to token endpoint {self.client_config.token_endpoint} for refresh failed: {e.os_error or str(e)}") from e
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             self.logger.error("Token refresh request timed out", token_url=str(self.client_config.token_endpoint))
             raise MCPConnectionError(f"Request to token endpoint {self.client_config.token_endpoint} for refresh timed out.") from e
         except aiohttp.ClientError as e:

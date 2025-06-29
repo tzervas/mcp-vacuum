@@ -2,13 +2,35 @@
 Unit tests for Pydantic models in src/mcp_vacuum/models/
 """
 import time
+
 import pytest
 from pydantic import ValidationError
 
-from mcp_vacuum.models.auth import OAuth2Token, PKCEChallenge, ClientCredentials, OAuth2ClientConfig
-from mcp_vacuum.models.mcp import MCPServiceRecord, MCPTool, MCPAnnotations, MCPServerInfo, MCPCapabilities
-from mcp_vacuum.models.kagent import KagentTool, KagentMetadata, KagentToolSpec, KagentCRDSchema, ConversionMetadataModel, ValidationResult, ValidationIssue, ValidationSeverity
-from mcp_vacuum.models.common import TransportType, AuthMethod, ToolCategory, RiskLevel, MCPCapability, MCPCapabilityType, AuthenticationMetadata
+from mcp_vacuum.models.auth import (
+    OAuth2Token,
+    PKCEChallenge,
+)
+from mcp_vacuum.models.common import (
+    AuthenticationMetadata,
+    AuthMethod,
+    MCPCapability,
+    MCPCapabilityType,
+    TransportType,
+)
+from mcp_vacuum.models.kagent import (
+    KagentCRDSchema,
+    KagentMetadata,
+    KagentTool,
+    KagentToolSpec,
+    ValidationIssue,
+    ValidationResult,
+    ValidationSeverity,
+)
+from mcp_vacuum.models.mcp import (
+    MCPAnnotations,
+    MCPServiceRecord,
+    MCPTool,
+)
 
 # --- Auth Models Tests ---
 

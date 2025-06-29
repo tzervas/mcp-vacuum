@@ -1,13 +1,17 @@
 """
 Unit tests for PKCE generation utilities.
 """
-import pytest
-import re
-import hashlib
 import base64
+import hashlib
+import re
+import secrets
+import string
+
+import pytest
 
 from mcp_vacuum.auth.pkce import generate_pkce_challenge_pair
 from mcp_vacuum.models.auth import PKCEChallenge
+
 
 def test_generate_pkce_s256():
     """Test S256 PKCE challenge generation."""
@@ -65,11 +69,8 @@ def test_pkce_verifier_default_generation():
 
 
 @pytest.mark.parametrize("verifier_length", [43, 64, 128]) # Test min, mid, and max
-def test_pkce_model_accepts_various_verifier_lengths(verifier_length):
+def test_pkce_model_accepts_various_verifier_lengths(verifier_length: int):
     """Test that the PKCEChallenge model accepts verifiers of various allowed lengths."""
-    import secrets
-    import string
-
     # Generate a verifier of the specified length using allowed characters
     # RFC 7636: code-verifier = high-entropy cryptographic random STRING using the unreserved characters
     # [A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~"

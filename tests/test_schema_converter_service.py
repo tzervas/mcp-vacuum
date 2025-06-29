@@ -1,14 +1,18 @@
 """
 Unit tests for SchemaConverterService.
 """
+
 import pytest
-from typing import Dict, Any
 
 from mcp_vacuum.config import Config
-from mcp_vacuum.schema_gen.schema_converter_service import SchemaConverterService, ConversionServiceResult
-from mcp_vacuum.models.mcp import MCPTool, MCPServerInfo, MCPAnnotations
-from mcp_vacuum.models.kagent import KagentTool, KagentCRDSchema, ValidationSeverity
-from mcp_vacuum.models.common import ToolCategory, RiskLevel, TransportType
+from mcp_vacuum.models.common import RiskLevel, ToolCategory
+from mcp_vacuum.models.kagent import KagentTool
+from mcp_vacuum.models.mcp import MCPAnnotations, MCPServerInfo, MCPTool
+from mcp_vacuum.schema_gen.schema_converter_service import (
+    ConversionServiceResult,
+    SchemaConverterService,
+)
+
 
 @pytest.fixture
 def app_config():

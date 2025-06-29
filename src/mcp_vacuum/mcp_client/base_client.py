@@ -3,24 +3,29 @@ Base MCP Client Abstract Class.
 """
 import abc
 import asyncio
-import json
 import random
 import uuid
-from typing import Any, Dict, Optional, Tuple, AsyncGenerator, Union
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import aiohttp
-from pydantic import HttpUrl # Ensure HttpUrl is imported if used directly for validation here
 
-from ..models.mcp import MCPTool, MCPServiceRecord
+from ..config import Config, MCPClientConfig  # MCPClientConfig for CB settings
 from ..models.auth import OAuth2Token
-from .exceptions import MCPClientError, MCPConnectionError, MCPProtocolError, MCPToolInvocationError, MCPTimeoutError
-from ..config import Config, MCPClientConfig # MCPClientConfig for CB settings
+from ..models.mcp import MCPServiceRecord
 from ..utils.resilience import CircuitBreaker, CircuitBreakerOpenError
+from .exceptions import (
+    MCPClientError,
+    MCPConnectionError,
+    MCPProtocolError,
+    MCPTimeoutError,
+    MCPToolInvocationError,
+)
 
 # Consider using a dedicated JSON-RPC library or building a robust handler.
 # For now, a simple request/response formatter.
 
-def generate_jsonrpc_request(method: str, params: Optional[Dict[str, Any]] = None, request_id: Optional[Union[str, int]] = None) -> Dict[str, Any]:
+def generate_jsonrpc_request(method: str, params: dict[str, Any] | None = None, request_id: str | int | None = None) -> dict[str, Any]:
     """Generates a JSONRPC 2.0 request dictionary."""
     if request_id is None:
         request_id = str(uuid.uuid4())
@@ -38,17 +43,17 @@ class BaseMCPClient(abc.ABC):
     regardless of the underlying transport mechanism.
     """
 
-    def __init__(self, service_record: MCPServiceRecord, config: Config, aiohttp_session: Optional[aiohttp.ClientSession] = None):
+    def __init__(self, service_record: MCPServiceRecord, config: Config, aiohttp_session: aiohttp.ClientSession | None = None):
         self.service_record = service_record
         self.config = config
         self.mcp_client_config: MCPClientConfig = config.mcp_client # Store typed mcp_client config
         self._session = aiohttp_session # For HTTP based transports
-        self._current_token: Optional[OAuth2Token] = None # To be managed by auth system
+        self._current_token: OAuth2Token | None = None # To be managed by auth system
 
         self.logger = structlog.get_logger(__name__).bind(client_for_server=service_record.name, server_endpoint=str(service_record.endpoint))
 
         if self.mcp_client_config.enable_circuit_breaker:
-            self._circuit_breaker: Optional[CircuitBreaker] = CircuitBreaker(
+            self._circuit_breaker: CircuitBreaker | None = CircuitBreaker(
                 failure_threshold=self.mcp_client_config.cb_failure_threshold,
                 recovery_timeout_seconds=self.mcp_client_config.cb_recovery_timeout_seconds,
                 half_open_max_successes=self.mcp_client_config.cb_half_open_max_successes,
@@ -60,7 +65,7 @@ class BaseMCPClient(abc.ABC):
             self.logger.info("Circuit breaker is disabled for this client.")
 
 
-    async def set_auth_token(self, token: Optional[OAuth2Token]):
+    async def set_auth_token(self, token: OAuth2Token | None):
         """Sets the OAuth2 token to be used for requests."""
         self._current_token = token
 
@@ -89,7 +94,7 @@ class BaseMCPClient(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def _send_request_raw(self, request_payload: Dict[str, Any], is_idempotent: bool) -> Dict[str, Any]:
+    async def _send_request_raw(self, request_payload: dict[str, Any], is_idempotent: bool) -> dict[str, Any]:
         """
         Sends a raw JSONRPC request payload and returns the raw JSONRPC response.
         This is the core method that transport-specific clients must implement.
@@ -103,7 +108,7 @@ class BaseMCPClient(abc.ABC):
         """
         pass
 
-    async def send_request(self, method: str, params: Optional[Dict[str, Any]] = None, request_id: Optional[Union[str, int]] = None, is_idempotent: bool = True) -> Any:
+    async def send_request(self, method: str, params: dict[str, Any] | None = None, request_id: str | int | None = None, is_idempotent: bool = True) -> Any:
         """
         Constructs a JSONRPC request, sends it, and processes the response.
         Handles retries (if applicable) and JSONRPC error checking.
@@ -116,7 +121,7 @@ class BaseMCPClient(abc.ABC):
         """
         # HTTP is often connectionless per request, so is_connected might be less relevant before the actual attempt.
         # For other transport types, a persistent connection is usually expected.
-        from ..models.common import TransportType # Import for enum comparison
+        from ..models.common import TransportType  # Import for enum comparison
         if not await self.is_connected() and self.service_record.transport_type != TransportType.HTTP: # HTTP is often connectionless per request
             # Attempt to reconnect or raise error, depending on strategy
             # For now, let's assume connect() should be called explicitly by managing code if needed.
@@ -128,14 +133,14 @@ class BaseMCPClient(abc.ABC):
         initial_backoff = self.mcp_client_config.initial_backoff_seconds
         max_backoff = self.mcp_client_config.max_backoff_seconds
 
-        last_exception: Optional[Exception] = None
+        last_exception: Exception | None = None
 
         for attempt in range(max_attempts):
             log_attempt = self.logger.bind(attempt=attempt + 1, max_attempts=max_attempts, method=method, request_id=req_payload["id"])
             try:
                 log_attempt.debug("Attempting to send request.")
 
-                response_payload: Dict[str, Any]
+                response_payload: dict[str, Any]
                 if self._circuit_breaker:
                     response_payload = await self._circuit_breaker.call(self._send_request_raw, req_payload, is_idempotent)
                 else:
@@ -176,14 +181,13 @@ class BaseMCPClient(abc.ABC):
                 # The retry loop here provides an additional layer of retries if the CB is CLOSED/HALF_OPEN.
                 last_exception = e
                 if is_idempotent and attempt < max_attempts - 1: # Only retry if idempotent
-                    # Standard exponential backoff with full jitter: random delay between 0 and capped backoff
-                    capped_backoff = min(initial_backoff * (2 ** attempt), max_backoff)
-                    backoff_time = random.uniform(0, capped_backoff)
+                    backoff_time = initial_backoff * (2 ** attempt) + random.uniform(0, 0.1 * initial_backoff)
+                    backoff_time = min(backoff_time, max_backoff) # Cap at max_backoff
                     log_attempt.warning(f"Connection error encountered. Retrying in {backoff_time:.2f}s...", error_message=str(e), error_type=type(e).__name__)
                     await asyncio.sleep(backoff_time)
                 else:
                     log_attempt.error(f"Failed request after {max_attempts} attempts or because non-idempotent.", last_error=str(e), is_idempotent=is_idempotent)
-                    if isinstance(e, (MCPConnectionError, MCPTimeoutError)):
+                    if isinstance(e, MCPConnectionError | MCPTimeoutError):
                         raise
                     else: # Wrap other ClientErrors
                         raise MCPConnectionError(f"Failed request '{method}' (idempotent={is_idempotent}) after {attempt + 1} attempts: {e}") from e
@@ -194,7 +198,7 @@ class BaseMCPClient(abc.ABC):
 
             except Exception as e: # Catch any other unexpected errors
                 last_exception = e
-                log_attempt.exception(f"Unexpected error during request.", error_type=type(e).__name__)
+                log_attempt.exception("Unexpected error during request.", error_type=type(e).__name__)
                 if is_idempotent and attempt < max_attempts - 1: # Only retry if idempotent
                     backoff_time = min(initial_backoff * (2 ** attempt) + random.uniform(0, 0.1 * initial_backoff), max_backoff)
                     await asyncio.sleep(backoff_time)
@@ -212,14 +216,14 @@ class BaseMCPClient(abc.ABC):
         raise MCPClientError(f"Request '{method}' failed after exhausting retries (or was non-idempotent), but no specific exception was properly propagated.")
 
 
-    async def get_server_capabilities(self) -> Dict[str, Any]:
+    async def get_server_capabilities(self) -> dict[str, Any]:
         """
         Retrieves the server's capabilities. Standard method name: "mcp.capabilities".
         This is an idempotent operation.
         """
         return await self.send_request(method="mcp.capabilities", is_idempotent=True)
 
-    async def list_tools(self) -> List[Dict[str, Any]]:
+    async def list_tools(self) -> List[dict[str, Any]]:
         """
         Lists all tools available on the MCP server. Standard method name: "mcp.listTools".
         This is an idempotent operation.
@@ -229,7 +233,7 @@ class BaseMCPClient(abc.ABC):
         # TODO: Add Pydantic parsing here: [MCPTool.model_validate(t) for t in raw_tools_data]
         return raw_tools_data
 
-    async def get_tool_schema(self, tool_name: str) -> Dict[str, Any]:
+    async def get_tool_schema(self, tool_name: str) -> dict[str, Any]:
         """
         Retrieves the detailed schema for a specific tool. Standard method name: "mcp.getToolSchema".
         This is an idempotent operation.
@@ -242,7 +246,7 @@ class BaseMCPClient(abc.ABC):
     async def invoke_tool(
         self,
         tool_name: str,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
         is_idempotent: bool = False # Tool invocations are often NOT idempotent by default
     ) -> Any:
         """
@@ -256,13 +260,13 @@ class BaseMCPClient(abc.ABC):
         """
         return await self.send_request(method=f"tool/{tool_name}", params=parameters, is_idempotent=is_idempotent)
 
-    async def subscribe_to_event(self, event_name: str) -> AsyncGenerator[Dict[str, Any], None]:
+    async def subscribe_to_event(self, event_name: str) -> AsyncGenerator[dict[str, Any], None]:
         """
         Subscribes to a server-side event stream (if transport supports it, e.g., SSE, WebSockets).
         """
         raise NotImplementedError(f"Event subscription via 'subscribe_to_event' is not implemented for {self.service_record.transport_type.value} transport.")
 
-    def get_session(self) -> Optional[aiohttp.ClientSession]:
+    def get_session(self) -> aiohttp.ClientSession | None:
         """Returns the aiohttp session if used by the client (primarily for HTTP-based transports)."""
         return self._session
 

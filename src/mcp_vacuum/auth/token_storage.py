@@ -2,18 +2,18 @@
 Secure storage for OAuth 2.1 tokens and client credentials.
 """
 import abc
-import json
 import base64
-from typing import Optional, Dict, Any, Type
+import json
+from typing import Any
 
 import keyring
-from cryptography.fernet import Fernet, InvalidToken
+import structlog  # Import structlog
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from ..models.auth import OAuth2Token, ClientCredentials
-from ..config import AuthConfig # For keyring service name, file paths
-import structlog # Import structlog
+from ..config import AuthConfig  # For keyring service name, file paths
+from ..models.auth import ClientCredentials, OAuth2Token
 
 logger = structlog.get_logger(__name__)
 
@@ -38,7 +38,7 @@ class BaseTokenStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_oauth_token(self, server_id: str) -> Optional[OAuth2Token]:
+    async def get_oauth_token(self, server_id: str) -> OAuth2Token | None:
         """Retrieves an OAuth2Token for a given server ID."""
         pass
 
@@ -53,7 +53,7 @@ class BaseTokenStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_client_credentials(self, server_id: str) -> Optional[ClientCredentials]:
+    async def get_client_credentials(self, server_id: str) -> ClientCredentials | None:
         """Retrieves ClientCredentials for a given server ID."""
         pass
 
@@ -77,7 +77,7 @@ class KeyringTokenStorage(BaseTokenStorage):
     def _get_key(self, server_id: str, suffix: str) -> str:
         return f"{server_id}{suffix}"
 
-    async def _store_item(self, key: str, item_model: Type[OAuth2Token] | Type[ClientCredentials], item_data: Dict[str, Any]) -> None:
+    async def _store_item(self, key: str, item_model: type[OAuth2Token] | type[ClientCredentials], item_data: dict[str, Any]) -> None:
         try:
             # Pydantic model to JSON string
             item_json = item_model(**item_data).model_dump_json()
@@ -90,7 +90,7 @@ class KeyringTokenStorage(BaseTokenStorage):
             self.logger.error("Failed to store item in keyring", key_hint=key[:10]+"...", error=str(e))
             raise TokenStorageError(f"Failed to store item in keyring for key '{key}': {e}") from e
 
-    async def _get_item(self, key: str, item_model: Type[OAuth2Token] | Type[ClientCredentials]) -> Optional[Any]: # Actually Optional[OAuth2Token] or Optional[ClientCredentials]
+    async def _get_item(self, key: str, item_model: type[OAuth2Token] | type[ClientCredentials]) -> Any | None: # Actually Optional[OAuth2Token] or Optional[ClientCredentials]
         try:
             item_json = keyring.get_password(self.service_name, key)
             if item_json:
@@ -133,7 +133,7 @@ class KeyringTokenStorage(BaseTokenStorage):
         key = self._get_key(server_id, self.OAUTH_TOKEN_SUFFIX)
         await self._store_item(key, OAuth2Token, token.model_dump())
 
-    async def get_oauth_token(self, server_id: str) -> Optional[OAuth2Token]:
+    async def get_oauth_token(self, server_id: str) -> OAuth2Token | None:
         key = self._get_key(server_id, self.OAUTH_TOKEN_SUFFIX)
         token_data = await self._get_item(key, OAuth2Token)
         return token_data if isinstance(token_data, OAuth2Token) else None
@@ -147,7 +147,7 @@ class KeyringTokenStorage(BaseTokenStorage):
         key = self._get_key(server_id, self.CLIENT_CREDS_SUFFIX)
         await self._store_item(key, ClientCredentials, credentials.model_dump())
 
-    async def get_client_credentials(self, server_id: str) -> Optional[ClientCredentials]:
+    async def get_client_credentials(self, server_id: str) -> ClientCredentials | None:
         key = self._get_key(server_id, self.CLIENT_CREDS_SUFFIX)
         creds_data = await self._get_item(key, ClientCredentials)
         return creds_data if isinstance(creds_data, ClientCredentials) else None
@@ -215,7 +215,7 @@ class EncryptedFileTokenStorage(BaseTokenStorage):
         self.logger.warning("EncryptedFileTokenStorage.store_oauth_token is not fully implemented.")
         raise NotImplementedError("EncryptedFileTokenStorage is not fully implemented.")
 
-    async def get_oauth_token(self, server_id: str) -> Optional[OAuth2Token]:
+    async def get_oauth_token(self, server_id: str) -> OAuth2Token | None:
         self.logger.warning("EncryptedFileTokenStorage.get_oauth_token is not fully implemented.")
         raise NotImplementedError("EncryptedFileTokenStorage is not fully implemented.")
 
@@ -227,7 +227,7 @@ class EncryptedFileTokenStorage(BaseTokenStorage):
         self.logger.warning("EncryptedFileTokenStorage.store_client_credentials is not fully implemented.")
         raise NotImplementedError("EncryptedFileTokenStorage is not fully implemented.")
 
-    async def get_client_credentials(self, server_id: str) -> Optional[ClientCredentials]:
+    async def get_client_credentials(self, server_id: str) -> ClientCredentials | None:
         self.logger.warning("EncryptedFileTokenStorage.get_client_credentials is not fully implemented.")
         raise NotImplementedError("EncryptedFileTokenStorage is not fully implemented.")
 

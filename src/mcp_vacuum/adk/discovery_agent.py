@@ -2,13 +2,14 @@
 DiscoveryAgent: Responsible for discovering MCP servers on the network.
 """
 import asyncio
-from typing import List, Optional, Any
+
 import structlog
 
 from ..config import Config
-from .base import MCPVacuumBaseAgent # Corrected path
 from ..discovery.discovery_service import MCPDiscoveryService
-from ..models.mcp import MCPServiceRecord # For the event payload
+from ..models.mcp import MCPServiceRecord  # For the event payload
+from .base import MCPVacuumBaseAgent  # Corrected path
+
 
 # Define an event model for discovered servers
 class DiscoveredServerEvent:
@@ -16,31 +17,49 @@ class DiscoveredServerEvent:
         self.server_info = server_info # This is the MCPServerInfo model from Pydantic
 
     def __repr__(self):
-        return f"<DiscoveredServerEvent server_name='{self.server_info.name}' id='{self.server_info.id}'>"
+        return (
+            f"<DiscoveredServerEvent server_name='{self.server_info.name}' "
+            f"id='{self.server_info.id}'>"
+        )
 
 class DiscoveryAgent(MCPVacuumBaseAgent):
     """
     ADK Agent that wraps MCPDiscoveryService to find servers and emit events.
     """
 
-    def __init__(self, app_config: Config, parent_logger: structlog.BoundLogger, output_queue: asyncio.Queue):
-        super().__init__(agent_name="DiscoveryAgent", app_config=app_config, parent_logger=parent_logger)
+    def __init__(
+        self,
+        app_config: Config,
+        parent_logger: structlog.BoundLogger,
+        output_queue: asyncio.Queue,
+    ):
+        super().__init__(
+            agent_name="DiscoveryAgent",
+            app_config=app_config,
+            parent_logger=parent_logger,
+        )
         self.discovery_service = MCPDiscoveryService(app_config=app_config)
-        self.output_queue = output_queue # Queue to send DiscoveredServerEvent to Orchestrator
-        self._discovery_tasks: List[asyncio.Task] = []
+        # Queue to send DiscoveredServerEvent to Orchestrator
+        self.output_queue = output_queue
+        self._discovery_tasks: list[asyncio.Task] = []
         self.logger.info("DiscoveryAgent initialized.")
 
-    async def discover_servers_command(self, target_networks: Optional[List[str]] = None):
+    async def discover_servers_command(
+        self, target_networks: list[str] | None = None
+    ):
         """
         Command to start server discovery.
         This method is called by the OrchestrationAgent.
-        `target_networks` is currently not used by mDNS/SSDP implementations in MCPDiscoveryService,
-        but kept for future use (e.g. targeted scans, ARP).
+        `target_networks` is currently not used by mDNS/SSDP implementations in
+        MCPDiscoveryService, but kept for future use (e.g. targeted scans, ARP).
         """
-        self.logger.info("Received command to discover servers.", target_networks=target_networks)
+        self.logger.info(
+            "Received command to discover servers.", target_networks=target_networks
+        )
 
-        # Allow overlapping discovery operations by not stopping current discovery tasks.
-        # Each discovery command will start new discovery tasks and track them.
+        # Allow overlapping discovery operations by not stopping current
+        # discovery tasks. Each discovery command will start new discovery
+        # tasks and track them.
 
         # mDNS Discovery Task
         if self.app_config.discovery.enable_mdns:
@@ -64,7 +83,11 @@ class DiscoveryAgent(MCPVacuumBaseAgent):
         self.logger.info("Starting mDNS discovery loop.")
         try:
             async for server_record in self.discovery_service.discover_servers_mdns():
-                self.logger.info("mDNS discovered server", server_name=server_record.name, server_id=server_record.id)
+                self.logger.info(
+                    "mDNS discovered server",
+                    server_name=server_record.name,
+                    server_id=server_record.id,
+                )
                 event = DiscoveredServerEvent(server_info=server_record)
                 await self.output_queue.put(event)
             self.logger.info("mDNS discovery loop finished.")
@@ -80,7 +103,11 @@ class DiscoveryAgent(MCPVacuumBaseAgent):
         self.logger.info("Starting SSDP discovery loop.")
         try:
             async for server_record in self.discovery_service.discover_servers_ssdp():
-                self.logger.info("SSDP discovered server", server_name=server_record.name, server_id=server_record.id)
+                self.logger.info(
+                    "SSDP discovered server",
+                    server_name=server_record.name,
+                    server_id=server_record.id,
+                )
                 event = DiscoveredServerEvent(server_info=server_record)
                 await self.output_queue.put(event)
             self.logger.info("SSDP discovery loop finished (or was a no-op).")
@@ -96,15 +123,25 @@ class DiscoveryAgent(MCPVacuumBaseAgent):
         if not self._discovery_tasks:
             return
 
-        self.logger.info("Stopping current discovery tasks.", count=len(self._discovery_tasks))
+        self.logger.info(
+            "Stopping current discovery tasks.", count=len(self._discovery_tasks)
+        )
         for task in self._discovery_tasks:
             if not task.done():
                 task.cancel()
 
-        results = await asyncio.gather(*self._discovery_tasks, return_exceptions=True)
+        results = await asyncio.gather(
+            *self._discovery_tasks, return_exceptions=True
+        )
         for i, result in enumerate(results):
-            if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError) :
-                self.logger.error("Exception in discovery task during stop", task_index=i, error=str(result))
+            if isinstance(result, Exception) and not isinstance(
+                result, asyncio.CancelledError
+            ):
+                self.logger.error(
+                    "Exception in discovery task during stop",
+                    task_index=i,
+                    error=str(result),
+                )
 
         self._discovery_tasks = []
         # Also tell the service to stop its internal processes if any
@@ -123,10 +160,13 @@ class DiscoveryAgent(MCPVacuumBaseAgent):
         await super().stop()
         self.logger.info("DiscoveryAgent stopped (ADK lifecycle).")
 
-# Note: The `target_networks` parameter in `discover_servers_command` is not yet fully utilized
-# by the underlying `MCPDiscoveryService`'s mDNS/SSDP methods, which are typically broadcast/multicast based.
+# Note: The `target_networks` parameter in `discover_servers_command` is not
+# yet fully utilized by the underlying `MCPDiscoveryService`'s mDNS/SSDP
+# methods, which are typically broadcast/multicast based.
 # It would be more relevant for future direct scanning or ARP features.
-# The agent uses an `output_queue` to send `DiscoveredServerEvent` objects to its parent (OrchestrationAgent).
-# Error handling within the discovery loops ensures the agent doesn't crash on single discovery errors.
+# The agent uses an `output_queue` to send `DiscoveredServerEvent` objects to
+# its parent (OrchestrationAgent).
+# Error handling within the discovery loops ensures the agent doesn't crash on
+# single discovery errors.
 # The ADK `start` and `stop` methods are implemented.
 # Corrected import path for MCPVacuumBaseAgent.

@@ -1,21 +1,28 @@
 """
 Unit tests for TokenManager.
 """
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 import time
+from unittest.mock import AsyncMock, patch
 
-from mcp_vacuum.config import Config, AuthConfig, OAuthClientDetails as AppOAuthClientDetails
-from mcp_vacuum.models.mcp import MCPServerInfo as ConfigMCPServerInfo # Moved import
-from mcp_vacuum.auth.token_manager import TokenManager
-from mcp_vacuum.auth.token_storage import BaseTokenStorage, TokenNotFoundError
+import pytest
+
+from mcp_vacuum.auth.dynamic_registration import (
+    DynamicClientRegistrar,
+)
 from mcp_vacuum.auth.oauth_client import OAuth2Client
-from mcp_vacuum.auth.dynamic_registration import DynamicClientRegistrar, DynamicRegistrationError
-from mcp_vacuum.models.auth import OAuth2Token, ClientCredentials, OAuth2ClientConfig
-from mcp_vacuum.models.mcp import MCPServerInfo, AuthenticationMetadata # MCPServerInfo is used by TokenManager
-from mcp_vacuum.models.common import AuthMethod
+from mcp_vacuum.auth.token_manager import TokenManager
+from mcp_vacuum.auth.token_storage import BaseTokenStorage
+from mcp_vacuum.config import AuthConfig, Config
+from mcp_vacuum.config import OAuthClientDetails as AppOAuthClientDetails
 from mcp_vacuum.mcp_client.exceptions import MCPAuthError
+from mcp_vacuum.models.auth import ClientCredentials, OAuth2Token
+from mcp_vacuum.models.common import AuthMethod
+from mcp_vacuum.models.mcp import (  # MCPServerInfo is used by TokenManager
+    AuthenticationMetadata,
+    MCPServerInfo,
+)
+
 
 @pytest.fixture
 def app_config():
@@ -273,7 +280,6 @@ async def test_get_valid_token_concurrent_refresh_lock(
 
     # Create a counter for _perform_token_refresh calls
     refresh_call_count = 0
-    original_perform_refresh = token_manager._perform_token_refresh
 
     async def mock_perform_refresh_with_delay(*args, **kwargs):
         nonlocal refresh_call_count

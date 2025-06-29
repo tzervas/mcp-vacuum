@@ -2,17 +2,19 @@
 Manages OAuth 2.1 tokens, including retrieval, storage, caching, and automatic refresh.
 """
 import asyncio
-from typing import Optional, Dict
 
 import structlog
 
-from ..models.auth import OAuth2Token, OAuth2ClientConfig, ClientCredentials
-from ..models.mcp import MCPServerInfo # For context
+from ..config import (  # For global app config and auth specific config
+    AuthConfig,
+    Config,
+)
+from ..mcp_client.exceptions import MCPAuthError, MCPConnectionError
+from ..models.auth import ClientCredentials, OAuth2ClientConfig, OAuth2Token
+from ..models.mcp import MCPServerInfo  # For context
+from .dynamic_registration import DynamicClientRegistrar, DynamicRegistrationError
 from .oauth_client import OAuth2Client
 from .token_storage import BaseTokenStorage, TokenNotFoundError, get_token_storage
-from .dynamic_registration import DynamicClientRegistrar, DynamicRegistrationError
-from ..config import Config, AuthConfig # For global app config and auth specific config
-from ..mcp_client.exceptions import MCPAuthError, MCPConnectionError
 
 logger = structlog.get_logger(__name__)
 
@@ -22,7 +24,7 @@ class TokenManager:
     It can also handle dynamic client registration if configured.
     """
 
-    def __init__(self, app_config: Config, token_storage: Optional[BaseTokenStorage] = None):
+    def __init__(self, app_config: Config, token_storage: BaseTokenStorage | None = None):
         """
         Initializes the TokenManager.
 
@@ -36,10 +38,10 @@ class TokenManager:
         self._token_storage: BaseTokenStorage = token_storage or get_token_storage(self.auth_config)
 
         # In-memory cache for frequently accessed tokens to reduce storage I/O
-        self._token_cache: Dict[str, OAuth2Token] = {} # Key: server_id
+        self._token_cache: dict[str, OAuth2Token] = {} # Key: server_id
 
         # Lock for critical sections like token refresh to prevent race conditions
-        self._locks: Dict[str, asyncio.Lock] = {} # Key: server_id
+        self._locks: dict[str, asyncio.Lock] = {} # Key: server_id
 
         self.logger = logger
 
@@ -48,7 +50,7 @@ class TokenManager:
             self._locks[server_id] = asyncio.Lock()
         return self._locks[server_id]
 
-    async def get_valid_oauth_token(self, server_id: str, server_info: MCPServerInfo, force_refresh: bool = False) -> Optional[OAuth2Token]:
+    async def get_valid_oauth_token(self, server_id: str, server_info: MCPServerInfo, force_refresh: bool = False) -> OAuth2Token | None:
         """
         Retrieves a valid OAuth2Token for the given server_id.
         Handles caching, checking expiration, and automatic refresh.
@@ -117,7 +119,7 @@ class TokenManager:
             log.info("No valid token found through cache, storage, or refresh for automated retrieval.")
             return None # No valid token could be automatically obtained/refreshed.
 
-    async def _perform_token_refresh(self, server_id: str, server_info: MCPServerInfo, expired_token: OAuth2Token) -> Optional[OAuth2Token]:
+    async def _perform_token_refresh(self, server_id: str, server_info: MCPServerInfo, expired_token: OAuth2Token) -> OAuth2Token | None:
         """Helper to refresh a token and update storage/cache."""
         log = self.logger.bind(server_id=server_id, server_name=server_info.name)
         if not expired_token.refresh_token:
@@ -149,13 +151,13 @@ class TokenManager:
                 log.exception("Unexpected error during token refresh", error_type=type(e).__name__)
         return None
 
-    async def _get_oauth_client_config(self, server_id: str, server_info: MCPServerInfo, log_context: Any) -> Optional[OAuth2ClientConfig]:
+    async def _get_oauth_client_config(self, server_id: str, server_info: MCPServerInfo, log_context: Any) -> OAuth2ClientConfig | None:
         """
         Gets OAuth2ClientConfig for a server.
         Tries to use stored client credentials, falls back to dynamic registration or default config.
         """
         # 1. Try to get stored client credentials for this server_id
-        client_creds: Optional[ClientCredentials] = None
+        client_creds: ClientCredentials | None = None
         try:
             client_creds = await self._token_storage.get_client_credentials(server_id)
             if client_creds:
@@ -186,8 +188,8 @@ class TokenManager:
 
         # 3. Construct OAuth2ClientConfig
         # Base it on default OAuth client config if available, then override with specific credentials
-        final_client_id: Optional[str] = None
-        final_client_secret: Optional[str] = None
+        final_client_id: str | None = None
+        final_client_secret: str | None = None
 
         if client_creds:
             final_client_id = client_creds.client_id
@@ -225,7 +227,7 @@ class TokenManager:
             scopes=scopes
         )
 
-    async def store_new_token(self, server_id: str, token: OAuth2Token, log_context: Optional[Any] = None) -> None:
+    async def store_new_token(self, server_id: str, token: OAuth2Token, log_context: Any | None = None) -> None:
         """Stores a newly obtained token and updates the cache."""
         lg = log_context or self.logger.bind(server_id=server_id)
         try:

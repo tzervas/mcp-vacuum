@@ -2,26 +2,35 @@
 Service responsible for converting MCP tool schemas to Kagent CRD format
 and vice-versa, including validation and metadata enrichment.
 """
+import datetime  # For timestamping in metadata
 import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
-import datetime # For timestamping in metadata
+from typing import Any
 
 import structlog
 from pydantic import BaseModel, Field
 
-from ..config import Config # For any conversion-related configs if added later
-from ..models.mcp import MCPTool, MCPAnnotations, MCPServerInfo
-from ..models.kagent import KagentTool, KagentMetadata, KagentToolSpec, KagentCRDSchema, ValidationIssue, ValidationResult, ValidationSeverity, ConversionMetadataModel
-from ..models.common import ToolCategory, RiskLevel # Enums for categorization
+from ..config import Config  # For any conversion-related configs if added later
+from ..models.common import RiskLevel, ToolCategory  # Enums for categorization
+from ..models.kagent import (
+    ConversionMetadataModel,
+    KagentCRDSchema,
+    KagentMetadata,
+    KagentTool,
+    KagentToolSpec,
+    ValidationIssue,
+    ValidationResult,
+    ValidationSeverity,
+)
+from ..models.mcp import MCPServerInfo, MCPTool
 
 logger = structlog.get_logger(__name__)
 
 class ConversionServiceResult(BaseModel):
-    kagent_tool: Optional[KagentTool] = None
-    validation_issues: List[ValidationIssue] = Field(default_factory=list)
-    conversion_metadata: Optional[ConversionMetadataModel] = None
-    error_message: Optional[str] = None # For critical errors preventing conversion
+    kagent_tool: KagentTool | None = None
+    validation_issues: list[ValidationIssue] = Field(default_factory=list)
+    conversion_metadata: ConversionMetadataModel | None = None
+    error_message: str | None = None # For critical errors preventing conversion
 
     @property
     def has_errors(self) -> bool:
@@ -106,7 +115,7 @@ class SchemaConverterService:
         # TODO: Add more sophisticated risk assessment
         return RiskLevel.LOW
 
-    def _transform_json_schema_to_k8s_crd(self, json_schema: Dict[str, Any], is_output_schema: bool = False, mcp_tool_name: Optional[str] = None) -> KagentCRDSchema:
+    def _transform_json_schema_to_k8s_crd(self, json_schema: dict[str, Any], is_output_schema: bool = False, mcp_tool_name: str | None = None) -> KagentCRDSchema:
         """
         Converts a JSON Schema (Draft 7) to a Kubernetes CRD OpenAPI v3 compatible schema structure.
         This is a complex task. This implementation will be a simplified version for P0.
@@ -125,7 +134,7 @@ class SchemaConverterService:
 
         has_refs_or_definitions = False
 
-        def transform_node(node: Dict[str, Any]) -> Dict[str, Any]:
+        def transform_node(node: dict[str, Any]) -> dict[str, Any]:
             nonlocal has_refs_or_definitions
             if not isinstance(node, dict):
                 return node
@@ -210,7 +219,7 @@ class SchemaConverterService:
         log = self.logger.bind(mcp_tool_name=mcp_tool.name, server_id=server_info.id)
         log.debug("Starting conversion of MCPTool to KagentTool.")
 
-        validation_issues: List[ValidationIssue] = [] # Collect validation issues here
+        validation_issues: list[ValidationIssue] = [] # Collect validation issues here
 
         try:
             # 1. Metadata Conversion
@@ -242,7 +251,7 @@ class SchemaConverterService:
                 is_output_schema=False,
                 mcp_tool_name=mcp_tool.name
             )
-            kagent_output_schema: Optional[KagentCRDSchema] = None
+            kagent_output_schema: KagentCRDSchema | None = None
             if mcp_tool.output_schema:
                 kagent_output_schema = self._transform_json_schema_to_k8s_crd(
                     mcp_tool.output_schema,
@@ -307,9 +316,9 @@ class SchemaConverterService:
 
         except Exception as e:
             log.exception("Error during MCPTool to KagentTool conversion.", error=str(e))
-            return ConversionServiceResult(error_message=f"Conversion failed: {str(e)}", validation_issues=validation_issues)
+            return ConversionServiceResult(error_message=f"Conversion failed: {e!s}", validation_issues=validation_issues)
 
-    async def convert_kagent_to_mcp_tool(self, kagent_tool: KagentTool) -> Optional[MCPTool]:
+    async def convert_kagent_to_mcp_tool(self, kagent_tool: KagentTool) -> MCPTool | None:
         """
         Converts a KagentTool back to an MCPTool (Simplified for P0).
         """

@@ -1,10 +1,11 @@
 """
 Resilience utilities like Circuit Breaker.
 """
-import time
 import asyncio
+import time
+from collections.abc import Awaitable, Callable
 from enum import Enum
-from typing import Any, Callable, Awaitable, Optional, Type
+from typing import Any
 
 import structlog
 
@@ -34,7 +35,7 @@ class CircuitBreaker:
         failure_threshold: int = 5,
         recovery_timeout_seconds: float = 30.0,
         half_open_max_successes: int = 2, # Number of successful trials to fully close
-        name: Optional[str] = None # For logging
+        name: str | None = None # For logging
     ):
         if failure_threshold < 1:
             raise ValueError("Failure threshold must be at least 1.")
@@ -50,7 +51,7 @@ class CircuitBreaker:
 
         self._state = CircuitBreakerState.CLOSED
         self._failure_count = 0
-        self._last_failure_time: Optional[float] = None
+        self._last_failure_time: float | None = None
         self._half_open_success_count = 0
 
         self._lock = asyncio.Lock() # To protect state transitions
@@ -103,7 +104,7 @@ class CircuitBreaker:
             result = await func(*args, **kwargs)
             await self._on_success()
             return result
-        except Exception as e:
+        except Exception:
             # Only count specific types of exceptions as failures if needed.
             # For now, any exception from `func` is a failure.
             await self._on_failure()
@@ -164,9 +165,9 @@ class CircuitBreaker:
             raise CircuitBreakerOpenError(remaining_time=max(0, remaining))
         return self # Not strictly necessary to return self
 
-    async def __aexit__(self, exc_type: Optional[Type[BaseException]],
-                        exc_value: Optional[BaseException],
-                        traceback: Optional[Any]):
+    async def __aexit__(self, exc_type: type[BaseException] | None,
+                        exc_value: BaseException | None,
+                        traceback: Any | None):
         if exc_type is not None: # An exception occurred within the `async with` block
             # Don't double-count if it was CircuitBreakerOpenError from __aenter__
             if not isinstance(exc_value, CircuitBreakerOpenError):
