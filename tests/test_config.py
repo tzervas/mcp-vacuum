@@ -1,14 +1,11 @@
 """Tests for configuration module."""
 
-import os
-from pathlib import Path
+import pytest  # type: ignore[import-not-found]
 
-import pytest
-
-from mcp_vacuum.config import Config, DiscoveryConfig, AuthConfig
+from mcp_vacuum.config import Config
 
 
-def test_config_from_env(monkeypatch):
+def test_config_from_env(monkeypatch) -> None:
     """Test loading configuration from environment variables."""
     # Test a few representative environment variables, including nested and different types
     monkeypatch.setenv("MCP_VACUUM_LOGGING_LEVEL", "DEBUG")
@@ -21,8 +18,9 @@ def test_config_from_env(monkeypatch):
     monkeypatch.setenv("MCP_VACUUM_MCP_CLIENT_MAX_RETRIES", "5")
     monkeypatch.setenv("MCP_VACUUM_MCP_CLIENT_SSL_VERIFY", "false")
 
-    config = Config.from_env() # Default prefix is "MCP_VACUUM_"
-    
+    # With pydantic-settings, Config() directly loads from env vars
+    config = Config()
+
     assert config.logging.level == "DEBUG"
     assert config.agent_name == "TestAgent"
     assert config.discovery.timeout_seconds == 45
@@ -33,10 +31,10 @@ def test_config_from_env(monkeypatch):
     assert config.mcp_client.max_retries == 5
     assert config.mcp_client.ssl_verify is False
 
-def test_config_defaults():
+def test_config_defaults() -> None:
     """Test default configuration values for new and existing fields."""
     config = Config()
-    
+
     # DiscoveryConfig defaults
     assert config.discovery.timeout_seconds == 30
     assert config.discovery.scan_timeout_seconds == 5.0
@@ -77,7 +75,7 @@ def test_config_defaults():
     assert config.agent_version == "0.1.0"
 
 
-def test_config_from_file(tmp_path):
+def test_config_from_file(tmp_path) -> None:
     """Test loading configuration from a JSON file."""
     config_content = {
         "agent_name": "FileAgent",
@@ -119,13 +117,13 @@ def test_config_from_file(tmp_path):
     assert str(config.auth.encrypted_token_file_path) == "/tmp/tokens.enc"
     assert config.mcp_client.max_retries == 2
     assert config.mcp_client.ssl_verify is False
-    
+
     # Check that unspecified fields retain defaults
     assert config.discovery.enable_mdns is True # Default
     assert config.security.require_auth is True # Default
 
 
-def test_partial_config_from_file(tmp_path):
+def test_partial_config_from_file(tmp_path) -> None:
     """Test loading partial configuration from a file, defaults should apply."""
     config_content = {
         "discovery": {

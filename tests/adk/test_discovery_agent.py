@@ -1,15 +1,19 @@
 """
 Unit tests for DiscoveryAgent.
 """
-import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest  # type: ignore[import-not-found]
+
+from mcp_vacuum.adk.discovery_agent import DiscoveredServerEvent, DiscoveryAgent
 from mcp_vacuum.config import Config, DiscoveryConfig
-from mcp_vacuum.adk.discovery_agent import DiscoveryAgent, DiscoveredServerEvent
-from mcp_vacuum.discovery.discovery_service import MCPDiscoveryService # To mock its methods
-from mcp_vacuum.models.mcp import MCPServiceRecord
+from mcp_vacuum.discovery.discovery_service import (
+    MCPDiscoveryService,  # To mock its methods
+)
 from mcp_vacuum.models.common import TransportType
+from mcp_vacuum.models.mcp import MCPServiceRecord
+
 
 @pytest.fixture
 def app_config_adk():
@@ -165,6 +169,9 @@ async def test_discovery_agent_start_stop_lifecycle(discovery_agent, mock_parent
         discovery_agent.logger.info.assert_any_call("DiscoveryAgent stopping (ADK lifecycle)...")
         discovery_agent.logger.info.assert_any_call("DiscoveryAgent stopped (ADK lifecycle).")
 
-from mcp_vacuum.adk.base import MCPVacuumBaseAgent # Ensure this is available for patching super
-import structlog # For spec of mock_parent_logger
-import socket # For socket.AF_INET in discovery_service via config if it were more detailed. Not directly here.
+
+import structlog  # For spec of mock_parent_logger
+
+from mcp_vacuum.adk.base import (
+    MCPVacuumBaseAgent,  # Ensure this is available for patching super
+)

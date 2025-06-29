@@ -1,17 +1,20 @@
 """
 Unit tests for OAuth2Client.
 """
-import pytest
-import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
-from urllib.parse import urlparse, parse_qs
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
-from mcp_vacuum.config import Config, MCPClientConfig
+import pytest  # type: ignore[import-not-found]
+import aiohttp  # type: ignore[import-not-found]
+
 from mcp_vacuum.auth.oauth_client import OAuth2Client
 from mcp_vacuum.auth.pkce import generate_pkce_challenge_pair
-from mcp_vacuum.models.auth import OAuth2Token, PKCEChallenge, OAuthError, OAuth2ClientConfig as AppOAuthClientConfig
+from mcp_vacuum.config import Config
 from mcp_vacuum.mcp_client.exceptions import MCPAuthError, MCPConnectionError
+from mcp_vacuum.models.auth import OAuth2ClientConfig as AppOAuthClientConfig
+from mcp_vacuum.models.auth import OAuth2Token, OAuthError
+
 
 # Default app_config for tests
 @pytest.fixture

@@ -9,10 +9,11 @@ from .base_client import BaseMCPClient
 from .exceptions import (
     MCPClientError,
     MCPConnectionError,
-    MCPTimeoutError,
     MCPProtocolError,
+    MCPTimeoutError,
     MCPToolInvocationError,
 )
+
 # Will add specific transport clients here later
 # from .http_client import HTTPMCPClient
 # from .ws_client import WebSocketMCPClient
@@ -23,8 +24,8 @@ __all__ = [
     "BaseMCPClient",
     "MCPClientError",
     "MCPConnectionError",
-    "MCPTimeoutError",
     "MCPProtocolError",
+    "MCPTimeoutError",
     "MCPToolInvocationError",
     # "HTTPMCPClient",
     # "WebSocketMCPClient",
