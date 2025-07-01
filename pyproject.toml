@@ -6,7 +6,7 @@ authors = [
     {name = "Tyler Zervas", email = "tz-dev@vectorweight.com"},
 ]
 dependencies = [
-    "google-adk",  # Google Python Agent Developer Kit
+    "google-adk>=1.5.0",  # Google Python Agent Developer Kit
     "cryptography>=42.0.0",  # For secure credential storage
     "pydantic[email]>=2.5.0",  # For schema validation and serialization (with email validation)
     "aiohttp>=3.9.0",  # For async HTTP communications
