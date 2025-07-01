@@ -9,10 +9,15 @@ import structlog
 from ..config import Config
 from .base import MCPVacuumBaseAgent
 # Child agent types (to be created)
-from .discovery_agent import DiscoveryAgent, DiscoveredServerEvent
-from .auth_agent import AuthenticationAgent, AuthResultEvent
-from .conversion_agent import ConversionAgent, SchemaConversionResultEvent
+from .discovery_agent import DiscoveryAgent
+from .auth_agent import AuthenticationAgent
+from .conversion_agent import ConversionAgent
 from .mcp_client_agent import MCPClientAgent # Manages communication with specific MCP servers
+
+# Event processors
+from .discovery_handler import DiscoveryEventProcessor
+from .auth_handler import AuthEventProcessor
+from .conversion_handler import ConversionEventProcessor
 
 # Event/Data models for inter-agent communication (examples)
 # These might be more formally defined Pydantic models.
@@ -68,8 +73,10 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
         self.auth_event_queue = asyncio.Queue()
         self.conversion_event_queue = asyncio.Queue()
 
-        self._stop_event = asyncio.Event() # For gracefully stopping processor loops
-        self._processor_tasks: List[asyncio.Task] = []
+        # Event processors
+        self.discovery_processor: Optional[DiscoveryEventProcessor] = None
+        self.auth_processor: Optional[AuthEventProcessor] = None
+        self.conversion_processor: Optional[ConversionEventProcessor] = None
 
         self.logger.info("OrchestrationAgent initialized.")
 
@@ -129,102 +136,36 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
             output_queue=self.conversion_event_queue
         )
         self.logger.info("Child agents initialized.")
+        # Initialize event processors
+        self.discovery_processor = DiscoveryEventProcessor(
+            queue=self.discovery_event_queue,
+            auth_agent=self.auth_agent,
+            discovered_servers_info=self.discovered_servers_info,
+            logger=self.logger
+        )
+
+        self.auth_processor = AuthEventProcessor(
+            queue=self.auth_event_queue,
+            mcp_client_agent=self.mcp_client_agent,
+            conversion_agent=self.conversion_agent,
+            discovered_servers_info=self.discovered_servers_info,
+            authenticated_server_details=self.authenticated_server_details,
+            logger=self.logger
+        )
+
+        self.conversion_processor = ConversionEventProcessor(
+            queue=self.conversion_event_queue,
+            server_kagent_schemas=self.server_kagent_schemas,
+            logger=self.logger
+        )
+
         # ADK might have its own agent starting mechanism, e.g., await agent.start()
         # For now, assume they are ready after instantiation.
 
-    async def _process_discovery_events(self):
-        self.logger.info("Discovery event processor started.")
-        while not self._stop_event.is_set():
-            try:
-                event = await asyncio.wait_for(self.discovery_event_queue.get(), timeout=1.0)
-                if isinstance(event, DiscoveredServerEvent):
-                    log = self.logger.bind(server_id=event.server_info.id, server_name=event.server_info.name)
-                    log.info("Received DiscoveredServerEvent.")
-                    self.discovered_servers_info[event.server_info.id] = event.server_info
-
-                    if self.auth_agent:
-                        # Command AuthAgent to authenticate this server
-                        log.debug("Requesting authentication for discovered server.")
-                        await self.auth_agent.authenticate_server_command(event.server_info)
-                    else:
-                        log.error("AuthAgent not available to process discovered server.")
-                else:
-                    log.warning("Received unknown event on discovery_event_queue", event_type=type(event).__name__)
-                self.discovery_event_queue.task_done()
-            except asyncio.TimeoutError:
-                continue # Allow checking self._stop_event
-            except asyncio.CancelledError:
-                self.logger.info("Discovery event processor cancelled.")
-                break
-            except Exception as e:
-                self.logger.exception("Error in discovery event processor", error=str(e))
-
-    async def _process_auth_events(self):
-        self.logger.info("Authentication event processor started.")
-        while not self._stop_event.is_set():
-            try:
-                event = await asyncio.wait_for(self.auth_event_queue.get(), timeout=1.0)
-                if isinstance(event, AuthResultEvent):
-                    log = self.logger.bind(server_id=event.server_id, success=event.success)
-                    log.info("Received AuthResultEvent.")
-                    if event.success and event.auth_data: # auth_data could be client_id or token placeholder
-                        self.authenticated_server_details[event.server_id] = event.auth_data
-                        server_info = self.discovered_servers_info.get(event.server_id)
-                        if server_info and self.mcp_client_agent and self.conversion_agent:
-                            log.debug("Requesting tool list from MCPClientAgent.")
-                            # MCPClientAgent fetches tools, then might directly trigger ConversionAgent
-                            # or send another event back to Orchestrator.
-                            # For simplicity, let's assume MCPClientAgent can call ConversionAgent or emit its own event.
-                            # This part needs careful design of inter-agent communication flow.
-                            # Option 1: Orchestrator tells MCPClientAgent, gets tools, then tells ConversionAgent
-                            # Option 2: MCPClientAgent directly tells ConversionAgent after getting tools
-                            # Option 3: MCPClientAgent emits "ToolsFetchedEvent", Orchestrator handles it.
-
-                            # Let's go with Option 1 for more central control initially:
-                            tools_list = await self.mcp_client_agent.get_tools_for_server(server_info)
-                            if tools_list:
-                                log.debug("Tools fetched, requesting schema conversion.", num_tools=len(tools_list))
-                                await self.conversion_agent.convert_schemas_command(server_info, tools_list)
-                            else:
-                                log.warning("No tools fetched for authenticated server.")
-                        else:
-                            if not server_info: log.warning("Server info not found for authenticated server.")
-                            if not self.mcp_client_agent: log.error("MCPClientAgent not available.")
-                            if not self.conversion_agent: log.error("ConversionAgent not available.")
-                    else:
-                        self.authenticated_server_details.pop(event.server_id, None) # Remove if auth failed
-                else:
-                    log.warning("Received unknown event on auth_event_queue", event_type=type(event).__name__)
-                self.auth_event_queue.task_done()
-            except asyncio.TimeoutError:
-                continue
-            except asyncio.CancelledError:
-                self.logger.info("Authentication event processor cancelled.")
-                break
-            except Exception as e:
-                self.logger.exception("Error in authentication event processor", error=str(e))
-
-    async def _process_conversion_events(self):
-        self.logger.info("Schema conversion event processor started.")
-        while not self._stop_event.is_set():
-            try:
-                event = await asyncio.wait_for(self.conversion_event_queue.get(), timeout=1.0)
-                if isinstance(event, SchemaConversionResultEvent):
-                    log = self.logger.bind(server_id=event.server_id, success=event.success)
-                    log.info("Received SchemaConversionResultEvent.")
-                    if event.success and event.kagent_tools_schemas:
-                        self.server_kagent_schemas[event.server_id] = event.kagent_tools_schemas
-                    # Handle failure if necessary
-                else:
-                    log.warning("Received unknown event on conversion_event_queue", event_type=type(event).__name__)
-                self.conversion_event_queue.task_done()
-            except asyncio.TimeoutError:
-                continue
-            except asyncio.CancelledError:
-                self.logger.info("Schema conversion event processor cancelled.")
-                break
-            except Exception as e:
-                self.logger.exception("Error in schema conversion event processor", error=str(e))
+    # Event processing has been moved to dedicated handler classes:
+    # - DiscoveryEventProcessor in discovery_handler.py
+    # - AuthEventProcessor in auth_handler.py
+    # - ConversionEventProcessor in conversion_handler.py
 
     async def run_main_workflow(self, target_networks: Optional[List[str]] = None) -> Dict[str, Any]:
         self.logger.info("Starting main MCP Vacuum workflow (ADK Orchestration).")
@@ -232,11 +173,10 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
 
         await self._initialize_child_agents()
 
-        self._processor_tasks = [
-            asyncio.create_task(self._process_discovery_events()),
-            asyncio.create_task(self._process_auth_events()),
-            asyncio.create_task(self._process_conversion_events()),
-        ]
+        # Start event processors
+        await self.discovery_processor.start()
+        await self.auth_processor.start()
+        await self.conversion_processor.start()
 
         if self.discovery_agent:
             self.logger.info("Sending initial discovery command.", target_networks=target_networks)
@@ -298,15 +238,13 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
         self.logger.info("Stopping event processors...")
         self._stop_event.set()
         for task in self._processor_tasks:
-            if not task.done():
-                try:
-                    task.cancel()
-                    await task
-                except asyncio.CancelledError:
-                    self.logger.debug("Processor task cancelled successfully.")
-                except Exception as e:
-                    self.logger.error("Error cancelling processor task", task_name=task.get_name(), error=str(e))
-        self._processor_tasks = []
+            # Stop all event processors
+            if self.discovery_processor:
+                await self.discovery_processor.stop()
+            if self.auth_processor:
+                await self.auth_processor.stop()
+            if self.conversion_processor:
+                await self.conversion_processor.stop()
         self.logger.info("Event processors stopped.")
 
     def get_summary(self) -> Dict[str, int]:

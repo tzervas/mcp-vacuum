@@ -33,7 +33,12 @@ class ConversionAgent(MCPVacuumBaseAgent):
         super().__init__(agent_name="ConversionAgent", app_config=app_config, parent_logger=parent_logger)
         self.converter_service = SchemaConverterService(app_config=app_config) # Service doing the actual work
         self.output_queue = output_queue # Queue to send SchemaConversionResultEvent to Orchestrator
-        self.logger.info("ConversionAgent initialized.")
+        
+        # Safe retrieval of fail_fast_conversion setting with bool type checking
+        fail_fast = getattr(app_config.agent_settings, "fail_fast_conversion", False)
+        self.fail_fast_conversion = isinstance(fail_fast, bool) and fail_fast
+        
+        self.logger.info("ConversionAgent initialized.", fail_fast_conversion=self.fail_fast_conversion)
         # self._conversion_tasks: Dict[str, asyncio.Task] = {} # server_id -> task, if managing ongoing conversions
 
     async def convert_schemas_command(self, server_info: MCPServerInfo, mcp_tools: List[MCPTool]):
