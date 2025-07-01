@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class AuthMethod(Enum):
@@ -52,7 +52,8 @@ class AuthCredentials(BaseModel):
     oauth_config: Optional[Dict[str, str]] = None
     custom_data: Optional[Dict[str, str]] = None
 
-    @validator("method", pre=True)
+    @field_validator("method", mode="before")
+    @classmethod
     def parse_auth_method(cls, v):
         """Parse auth method from string if needed."""
         if isinstance(v, str):
@@ -85,12 +86,10 @@ class MCPServer(BaseModel):
         default_factory=dict, description="Security assessment"
     )
 
-    class Config:
-        """Pydantic configuration."""
+    model_config = ConfigDict(use_enum_values=True)
 
-        use_enum_values = True
-
-    @validator("endpoint")
+    @field_validator("endpoint")
+    @classmethod
     def validate_endpoint(cls, v):
         """Validate endpoint URL format."""
         try:
@@ -169,7 +168,7 @@ class MCPServer(BaseModel):
 
     def to_dict(self) -> dict:
         """Convert server to dictionary representation."""
-        return self.dict()
+        return self.model_dump()
 
     @classmethod
     def from_dict(cls, data: dict) -> "MCPServer":
