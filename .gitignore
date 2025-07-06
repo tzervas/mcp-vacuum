@@ -92,3 +92,7 @@ src/mcp_vacuum/utils/git.py
 # docs/*.pdf
 
 .project-trackers/
+
+# Internal documentation and tracking (moved to mcp-vacuum-internal)
+.local/
+.metadata/
