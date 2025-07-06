@@ -72,3 +72,5 @@ secrets/
 
 # ignore internal docs
 # docs/*.pdf
+
+.project-trackers/
