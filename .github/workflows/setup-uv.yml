@@ -1,0 +1,25 @@
+name: Setup UV Package Manager
+
+on: [workflow_dispatch]
+
+jobs:
+  setup-uv:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        
+    steps:
+      - name: Install UV (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --prefix $HOME/.uv
+          echo "$HOME/.cargo/bin:$HOME/.uv/bin" >> $GITHUB_PATH
+
+      - name: Install UV (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --prefix $HOME/.uv
+          echo "$Env:USERPROFILE\.uv\bin" >> $env:GITHUB_PATH

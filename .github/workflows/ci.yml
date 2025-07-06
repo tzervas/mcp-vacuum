@@ -9,9 +9,10 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.12"]
 
     steps:
@@ -25,36 +26,38 @@ jobs:
 
     - name: Install uv
       run: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH # Older uv versions, $HOME/.uv/bin for newer
-        echo "$HOME/.uv/bin" >> $GITHUB_PATH    # Ensure new path is included
+        if [ "$RUNNER_OS" == "Linux" ] || [ "$RUNNER_OS" == "macOS" ]; then
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH # Older uv versions
+          echo "$HOME/.uv/bin" >> $GITHUB_PATH    # Newer versions
+        elif [ "$RUNNER_OS" == "Windows" ]; then
+          curl.exe -LsSf https://astral.sh/uv/install.ps1 -o install.ps1
+          powershell.exe -File install.ps1
+          echo "$HOME\.cargo\bin" >> $GITHUB_PATH # Older uv versions
+          echo "$HOME\.uv\bin" >> $GITHUB_PATH    # Newer versions
+        fi
         uv --version # Verify installation
 
     - name: Install dependencies using uv
       run: |
         uv pip install --system --upgrade pip # Ensure pip is there for uv's pip backend if needed
         uv venv .venv --python ${{ matrix.python-version }}
-        source .venv/bin/activate
         uv pip install --editable ".[dev]"
 
     - name: Lint with Ruff
       run: |
-        source .venv/bin/activate
         uv run ruff check .
 
     - name: Format with Black (check only)
       run: |
-        source .venv/bin/activate
         uv run black --check .
 
     - name: Type check with MyPy
       run: |
-        source .venv/bin/activate
         uv run mypy src tests
 
     - name: Test with Pytest and generate coverage
       run: |
-        source .venv/bin/activate
         uv run pytest --cov=src/mcp_vacuum --cov-report=xml --cov-report=term-missing tests/
 
     - name: Upload coverage reports to Codecov

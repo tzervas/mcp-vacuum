@@ -99,11 +99,9 @@ See `src/mcp_vacuum/config.py` for the full configuration schema. The CLI comman
 
 2.  **Set up the environment using `uv` (recommended):**
     ```bash
-    # Create a virtual environment (e.g., in .venv)
-    uv venv
-    source .venv/bin/activate # Or .venv\Scripts\activate on Windows
-
-    # Install dependencies including development tools
+    # Create a virtual environment and install dependencies
+    uv pip install --system --upgrade pip
+    uv venv .venv --python 3.12
     uv pip install -e ".[dev]"
     ```
     Alternatively, if you prefer `pip` directly (after creating and activating a venv):

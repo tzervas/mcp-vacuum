@@ -1,0 +1,13 @@
+{
+  "index_schema_version": "1.0",
+  "documentation_entries": [],
+  "last_indexed": "",
+  "documentation_paths": [
+    "docs/",
+    "README.md"
+  ],
+  "metadata": {
+    "indexed_file_types": [".md", ".rst", ".txt"],
+    "exclude_patterns": ["node_modules/", "dist/", "build/"]
+  }
+}
