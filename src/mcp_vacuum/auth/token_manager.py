@@ -234,79 +234,124 @@ class TokenManager:
                 )
         return None
 
-    async def _get_oauth_client_config(
+    async def _get_client_credentials(
         self, server_id: str, server_info: MCPServerInfo, log_context: Any
-    ) -> OAuth2ClientConfig | None:
-        """
-        Gets OAuth2ClientConfig for a server.
-        Tries to use stored client credentials, falls back to dynamic registration or default config.
-        """
-        # 1. Try to get stored client credentials for this server_id
-        client_creds: ClientCredentials | None = None
+    ) -> ClientCredentials | None:
+        """Retrieves or registers client credentials for a server."""
+        # Try stored credentials first
         try:
             client_creds = await self._token_storage.get_client_credentials(server_id)
             if client_creds:
                 log_context.debug("Found stored client credentials for server.")
+                return client_creds
         except TokenStorageError as e:
             log_context.warning(
                 "Error retrieving stored client credentials", error=str(e)
             )
 
-        # 2. If no stored creds, and dynamic registration is enabled, try to
-        # register
-        if not client_creds and self.auth_config.oauth_dynamic_client_registration:
-            if server_info.registration_endpoint:  # MCPServerInfo needs this field
-                log_context.info("Attempting dynamic client registration.")
-                try:
-                    registrar = DynamicClientRegistrar(app_config=self.app_config)
-                    async with registrar:
-                        # Pass software_id and software_version from
-                        # app_config if available
-                        client_creds = await registrar.register_client(
-                            # Ensure str
-                            registration_endpoint=str(
-                                server_info.registration_endpoint
-                            ),
-                            server_info=server_info,
-                        )
-                    await self._token_storage.store_client_credentials(
-                        server_id, client_creds
-                    )
-                    log_context.info(
-                        "Dynamic client registration successful, credentials stored."
-                    )
-                except DynamicRegistrationError as e:
-                    log_context.error(
-                        "Dynamic client registration failed", error=str(e)
-                    )
-                except MCPConnectionError as e:
-                    log_context.error(
-                        "Connection error during dynamic client registration",
-                        error=str(e),
-                    )
-            else:
-                log_context.debug(
-                    "Dynamic registration enabled, but server has no "
-                    "registration_endpoint."
-                )
+        # Try dynamic registration if enabled
+        if self.auth_config.oauth_dynamic_client_registration:
+            return await self._register_client(server_id, server_info, log_context)
 
-        # 3. Construct OAuth2ClientConfig
-        # Base it on default OAuth client config if available, then override
-        # with specific credentials
-        final_client_id: str | None = None
-        final_client_secret: str | None = None
+        return None
+
+    async def _register_client(
+        self, server_id: str, server_info: MCPServerInfo, log_context: Any
+    ) -> ClientCredentials | None:
+        """Attempts dynamic client registration with the server."""
+        if not server_info.registration_endpoint:
+            log_context.debug(
+                "Dynamic registration enabled, but server has no registration_endpoint."
+            )
+            return None
+
+        try:
+            registrar = DynamicClientRegistrar(app_config=self.app_config)
+            async with registrar:
+                client_creds = await registrar.register_client(
+                    registration_endpoint=str(server_info.registration_endpoint),
+                    server_info=server_info,
+                )
+            await self._token_storage.store_client_credentials(server_id, client_creds)
+            log_context.info("Dynamic client registration successful, credentials stored.")
+            return client_creds
+        except (DynamicRegistrationError, MCPConnectionError) as e:
+            log_context.error(
+                "Dynamic client registration failed",
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            return None
+
+    def _resolve_oauth_endpoints(
+        self, server_info: MCPServerInfo
+    ) -> tuple[str | None, str | None]:
+        """Resolves authorization and token endpoints from server info or defaults."""
+        auth_meta = server_info.auth_metadata
+        default_client = self.auth_config.oauth_default_client
+
+        auth_endpoint = (
+            auth_meta.authorization_endpoint
+            if auth_meta and auth_meta.authorization_endpoint
+            else (
+                default_client.authorization_endpoint
+                if default_client
+                else None
+            )
+        )
+
+        token_endpoint = (
+            auth_meta.token_endpoint
+            if auth_meta and auth_meta.token_endpoint
+            else (
+                default_client.token_endpoint
+                if default_client
+                else None
+            )
+        )
+
+        return auth_endpoint, token_endpoint
+
+    def _get_client_config_defaults(self) -> tuple[str, list[str]]:
+        """Gets default redirect URI and scopes for OAuth client config."""
+        default_client = self.auth_config.oauth_default_client
+
+        redirect_uri = (
+            default_client.redirect_uri
+            if default_client
+            else f"http://localhost:{self.auth_config.oauth_redirect_uri_port}/oauth/callback"
+        )
+
+        scopes = (
+            default_client.scopes
+            if default_client
+            else ["openid", "profile", "mcp:tools"]
+        )
+
+        return str(redirect_uri), scopes
+
+    async def _get_oauth_client_config(
+        self, server_id: str, server_info: MCPServerInfo, log_context: Any
+    ) -> OAuth2ClientConfig | None:
+        """Gets OAuth2ClientConfig for a server.
+        
+        Tries to use stored client credentials, falls back to dynamic registration 
+        or default config.
+        """
+        # Get client credentials (stored or via registration)
+        client_creds = await self._get_client_credentials(server_id, server_info, log_context)
+
+        # Determine client ID and secret
+        final_client_id = None
+        final_client_secret = None
 
         if client_creds:
             final_client_id = client_creds.client_id
             final_client_secret = client_creds.client_secret
         elif self.auth_config.oauth_default_client:
-            log_context.debug(
-                "Using default OAuth client credentials from config."
-            )
+            log_context.debug("Using default OAuth client credentials from config.")
             final_client_id = self.auth_config.oauth_default_client.client_id
-            final_client_secret = (
-                self.auth_config.oauth_default_client.client_secret
-            )
+            final_client_secret = self.auth_config.oauth_default_client.client_secret
 
         if not final_client_id:
             log_context.error(
@@ -315,56 +360,24 @@ class TokenManager:
             )
             return None
 
-        # Determine endpoints: Prefer server_info (discovered), fallback to
-        # default config. MCPServerInfo should have auth_metadata with these
-        # endpoints.
-        auth_meta = server_info.auth_metadata
-        auth_endpoint = (
-            auth_meta.authorization_endpoint
-            if auth_meta and auth_meta.authorization_endpoint
-            else (
-                self.auth_config.oauth_default_client.authorization_endpoint
-                if self.auth_config.oauth_default_client
-                else None
-            )
-        )
-        token_endpoint = (
-            auth_meta.token_endpoint
-            if auth_meta and auth_meta.token_endpoint
-            else (
-                self.auth_config.oauth_default_client.token_endpoint
-                if self.auth_config.oauth_default_client
-                else None
-            )
-        )
-
+        # Get endpoints
+        auth_endpoint, token_endpoint = self._resolve_oauth_endpoints(server_info)
         if not auth_endpoint or not token_endpoint:
             log_context.error(
-                "Authorization or Token endpoint not found for server or in "
-                "default config."
+                "Authorization or Token endpoint not found for server or in default config."
             )
             return None
 
-        # Redirect URI - this is tricky for an agent. Use default from config.
-        redirect_uri = (
-            self.auth_config.oauth_default_client.redirect_uri
-            if self.auth_config.oauth_default_client
-            else f"http://localhost:{self.auth_config.oauth_redirect_uri_port}/oauth/callback"
-        )
-
-        scopes = (
-            self.auth_config.oauth_default_client.scopes
-            if self.auth_config.oauth_default_client
-            else ["openid", "profile", "mcp:tools"]
-        )
+        # Get other config defaults
+        redirect_uri, scopes = self._get_client_config_defaults()
 
         return OAuth2ClientConfig(
             client_id=final_client_id,
-            client_secret=final_client_secret,  # Will be None for public clients
-            authorization_endpoint=str(auth_endpoint),  # Ensure str
-            token_endpoint=str(token_endpoint),  # Ensure str
-            redirect_uri=str(redirect_uri),  # Ensure str
-            scopes=scopes,
+            client_secret=final_client_secret,
+            authorization_endpoint=str(auth_endpoint),
+            token_endpoint=str(token_endpoint),
+            redirect_uri=redirect_uri,
+            scopes=scopes
         )
 
     async def store_new_token(

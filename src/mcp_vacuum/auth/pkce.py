@@ -37,22 +37,13 @@ def generate_pkce_challenge_pair(code_challenge_method: str = "S256") -> PKCECha
     # So, for 128 chars, need 128 / 1.33 ~= 96 bytes.
     # For 43 chars, need 43 / 1.33 ~= 32 bytes.
     # We'll use a verifier length that's substantial, e.g., 96 bytes -> 128 chars.
-    # Generate a verifier of exactly 128 characters from a 96-byte token.
-    # This ensures maximum length and entropy as per common practice.
-    # The model PKCEChallenge will validate if the length is within 43-128.
-    # 96 bytes will give us a 128-character string: (96 * 8) / 6 = 128 chars
-    verifier_bytes = secrets.token_bytes(96)
+    # Generate a secure random verifier of approximately 96 chars (72 bytes)
+    # This gives us plenty of entropy while staying within the 43-128 char limit
+    verifier_bytes = secrets.token_bytes(72)  # (72 * 8 / 6) ≈ 96 base64 chars
     code_verifier = base64.urlsafe_b64encode(verifier_bytes).decode('ascii').rstrip('=')
     
-    # Ensure exactly 128 characters even if urlsafe_b64encode behaves unexpectedly
-    if len(code_verifier) > 128:
-        code_verifier = code_verifier[:128]
-    elif len(code_verifier) < 128:
-        # Pad with 'A' up to 128 chars if encoding produces less (should never happen)
-        code_verifier = code_verifier.ljust(128, 'A')
-
-    # The code_verifier is now guaranteed to be exactly 128 characters
-    # Let PKCEChallenge handle any other validation
+    # Let PKCEChallenge handle validation of the verifier length and character set
+    # The length will be ~96 chars, well within the 43-128 limit
 
     if code_challenge_method == "S256":
         # Transform the code verifier using SHA256

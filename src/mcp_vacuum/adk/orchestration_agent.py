@@ -173,29 +173,9 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
                     self.discovery_event_queue.get(), timeout=1.0
                 )
                 if isinstance(event, DiscoveredServerEvent):
-                    log = self.logger.bind(
-                        server_id=event.server_info.id,
-                        server_name=event.server_info.name,
-                    )
-                    log.info("Received DiscoveredServerEvent.")
-                    self.discovered_servers_info[
-                        event.server_info.id
-                    ] = event.server_info
-
-                    if self.auth_agent:
-                        # Command AuthAgent to authenticate this server
-                        log.debug(
-                            "Requesting authentication for discovered server."
-                        )
-                        await self.auth_agent.authenticate_server_command(
-                            event.server_info
-                        )
-                    else:
-                        log.error(
-                            "AuthAgent not available to process discovered server."
-                        )
+                    await self._handle_discovered_server(event)
                 else:
-                    log.warning(
+                    self.logger.warning(
                         "Received unknown event on discovery_event_queue",
                         event_type=type(event).__name__,
                     )
@@ -216,71 +196,9 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
                     self.auth_event_queue.get(), timeout=1.0
                 )
                 if isinstance(event, AuthResultEvent):
-                    log = self.logger.bind(
-                        server_id=event.server_id, success=event.success
-                    )
-                    log.info("Received AuthResultEvent.")
-                    # auth_data could be client_id or token placeholder
-                    if event.success and event.auth_data:
-                        self.authenticated_server_details[
-                            event.server_id
-                        ] = event.auth_data
-                        server_info = self.discovered_servers_info.get(
-                            event.server_id
-                        )
-                        if (
-                            server_info
-                            and self.mcp_client_agent
-                            and self.conversion_agent
-                        ):
-                            log.debug("Requesting tool list from MCPClientAgent.")
-                            # MCPClientAgent fetches tools, then might directly
-                            # trigger ConversionAgent or send another event
-                            # back to Orchestrator.
-                            # For simplicity, let's assume MCPClientAgent can
-                            # call ConversionAgent or emit its own event.
-                            # This part needs careful design of inter-agent
-                            # communication flow.
-                            # Option 1: Orchestrator tells MCPClientAgent, gets
-                            # tools, then tells ConversionAgent
-                            # Option 2: MCPClientAgent directly tells
-                            # ConversionAgent after getting tools
-                            # Option 3: MCPClientAgent emits "ToolsFetchedEvent",
-                            # Orchestrator handles it.
-
-                            # Let's go with Option 1 for more central control
-                            # initially:
-                            tools_list = (
-                                await self.mcp_client_agent.get_tools_for_server(
-                                    server_info
-                                )
-                            )
-                            if tools_list:
-                                log.debug(
-                                    "Tools fetched, requesting schema conversion.",
-                                    num_tools=len(tools_list),
-                                )
-                                await self.conversion_agent.convert_schemas_command(
-                                    server_info, tools_list
-                                )
-                            else:
-                                log.warning(
-                                    "No tools fetched for authenticated server."
-                                )
-                        else:
-                            if not server_info:
-                                log.warning(
-                                    "Server info not found for authenticated server."
-                                )
-                            if not self.mcp_client_agent:
-                                log.error("MCPClientAgent not available.")
-                            if not self.conversion_agent:
-                                log.error("ConversionAgent not available.")
-                    else:
-                        # Remove if auth failed
-                        self.authenticated_server_details.pop(event.server_id, None)
+                    await self._handle_auth_result(event)
                 else:
-                    log.warning(
+                    self.logger.warning(
                         "Received unknown event on auth_event_queue",
                         event_type=type(event).__name__,
                     )
@@ -301,17 +219,9 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
                     self.conversion_event_queue.get(), timeout=1.0
                 )
                 if isinstance(event, SchemaConversionResultEvent):
-                    log = self.logger.bind(
-                        server_id=event.server_id, success=event.success
-                    )
-                    log.info("Received SchemaConversionResultEvent.")
-                    if event.success and event.kagent_tools_schemas:
-                        self.server_kagent_schemas[
-                            event.server_id
-                        ] = event.kagent_tools_schemas
-                    # Handle failure if necessary
+                    await self._handle_schema_conversion_result(event)
                 else:
-                    log.warning(
+                    self.logger.warning(
                         "Received unknown event on conversion_event_queue",
                         event_type=type(event).__name__,
                     )
@@ -437,6 +347,68 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
                     )
         self._processor_tasks = []
         self.logger.info("Event processors stopped.")
+
+    async def _handle_discovered_server(self, event: DiscoveredServerEvent) -> None:
+        """Handle a newly discovered server event."""
+        log = self.logger.bind(
+            server_id=event.server_info.id,
+            server_name=event.server_info.name,
+        )
+        log.info("Received DiscoveredServerEvent.")
+        self.discovered_servers_info[event.server_info.id] = event.server_info
+
+        if self.auth_agent:
+            log.debug("Requesting authentication for discovered server.")
+            await self.auth_agent.authenticate_server_command(event.server_info)
+        else:
+            log.error("AuthAgent not available to process discovered server.")
+
+    async def _handle_auth_result(self, event: AuthResultEvent) -> None:
+        """Handle authentication result event and trigger tool fetching if successful."""
+        log = self.logger.bind(server_id=event.server_id, success=event.success)
+        log.info("Received AuthResultEvent.")
+
+        if event.success and event.auth_data:
+            self.authenticated_server_details[event.server_id] = event.auth_data
+            await self._fetch_and_convert_tools(event.server_id, log)
+        else:
+            self.authenticated_server_details.pop(event.server_id, None)
+
+    async def _fetch_and_convert_tools(self, server_id: str, log: Any) -> None:
+        """Fetch tools for a server and initiate schema conversion."""
+        server_info = self.discovered_servers_info.get(server_id)
+        if not server_info:
+            log.warning("Server info not found for authenticated server.")
+            return
+        if not self.mcp_client_agent:
+            log.error("MCPClientAgent not available.")
+            return
+        if not self.conversion_agent:
+            log.error("ConversionAgent not available.")
+            return
+
+        log.debug("Requesting tool list from MCPClientAgent.")
+        tools_list = await self.mcp_client_agent.get_tools_for_server(server_info)
+
+        if tools_list:
+            log.debug(
+                "Tools fetched, requesting schema conversion.",
+                num_tools=len(tools_list),
+            )
+            await self.conversion_agent.convert_schemas_command(
+                server_info, tools_list
+            )
+        else:
+            log.warning("No tools fetched for authenticated server.")
+
+    async def _handle_schema_conversion_result(self, event: SchemaConversionResultEvent) -> None:
+        """Handle schema conversion result event."""
+        log = self.logger.bind(server_id=event.server_id, success=event.success)
+        log.info("Received SchemaConversionResultEvent.")
+        
+        if event.success and event.kagent_tools_schemas:
+            self.server_kagent_schemas[event.server_id] = event.kagent_tools_schemas
+        # Handle failure if necessary
 
     def get_summary(self) -> dict[str, int]:
         return {
