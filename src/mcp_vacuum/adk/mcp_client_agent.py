@@ -144,22 +144,10 @@ class MCPClientAgent(MCPVacuumBaseAgent):
             )
             # Retry once in case of expiry/invalidation
             # Ensure get_token_for_server_command supports force_refresh or similar.
-            # This assumes AuthenticationAgent.get_token_for_server_command
-            # can take force_refresh. If not, this part needs adjustment or
-            # the capability added to AuthAgent.
-            if hasattr(
-                self.auth_agent, "get_token_for_server_command"
-            ):  # Basic check
-                token = await self.auth_agent.get_token_for_server_command(
-                    server_info.id, server_info, force_refresh=True
-                )
-            else:  # Fallback if force_refresh is not directly supported
-                log.warning(
-                    "AuthAgent does not seem to support explicit force_refresh. "
-                    "Simple retry may not be effective for expired tokens."
-                )
-                # Consider if a different call to auth_agent is needed,
-                # e.g., one that always refreshes.
+            # Retry with force_refresh to ensure we get a fresh token
+            token = await self.auth_agent.get_token_for_server_command(
+                server_info.id, server_info, force_refresh=True
+            )
 
         if not token:
             log.warning(

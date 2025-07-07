@@ -187,8 +187,18 @@ class AuthenticationAgent(MCPVacuumBaseAgent):
         return None
 
     async def get_token_for_server_command(
-        self, server_id: str, server_info: MCPServerInfo
+        self, server_id: str, server_info: MCPServerInfo, force_refresh: bool = False
     ) -> OAuth2Token | None:
+        """Retrieve a valid OAuth token for a server.
+        
+        Args:
+            server_id: Unique identifier for the server
+            server_info: Server information including endpoints
+            force_refresh: If True, forces a token refresh even if cached/stored token exists
+        
+        Returns:
+            A valid OAuth2Token if available, None otherwise
+        """
         """
         Direct command for other agents (like MCPClientAgent) to request a token.
         This bypasses the event queue for a direct request-response if needed by
@@ -202,7 +212,9 @@ class AuthenticationAgent(MCPVacuumBaseAgent):
         log.info("Received direct command to get token for server.")
         try:
             token = await self.token_manager.get_valid_oauth_token(
-                server_id=server_id, server_info=server_info
+                server_id=server_id,
+                server_info=server_info,
+                force_refresh=force_refresh
             )
             if token:
                 log.debug("Successfully provided token via direct command.")
