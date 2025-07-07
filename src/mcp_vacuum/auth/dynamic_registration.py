@@ -60,9 +60,7 @@ class DynamicClientRegistrar:
 
             # This logic should be robust, checking scheme of registration_endpoint
             # For now, assume same SSL settings as general MCP client.
-            if mcp_client_cfg.ssl_verify:
-                pass
-            else:
+            if not mcp_client_cfg.ssl_verify:
                 self.logger.warning(
                     "SSL verification is DISABLED for DynamicClientRegistrar. "
                     "This is insecure."
