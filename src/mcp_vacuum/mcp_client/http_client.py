@@ -1,18 +1,21 @@
 """
 MCP Client implementation using HTTP/HTTPS transport.
 """
-import asyncio
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
-import aiohttp
-import structlog # Import structlog
+import aiohttp  # type: ignore[import-not-found]
+import structlog  # type: ignore[import-not-found]
 
-from .base_client import BaseMCPClient, generate_jsonrpc_request
-from .exceptions import MCPConnectionError, MCPTimeoutError, MCPProtocolError, MCPAuthError
-from ..models.mcp import MCPServiceRecord
-from ..models.auth import OAuth2Token
 from ..config import Config
+from ..models.mcp import MCPServiceRecord
+from .base_client import BaseMCPClient
+from .exceptions import (
+    MCPAuthError,
+    MCPConnectionError,
+    MCPProtocolError,
+    MCPTimeoutError,
+)
 
 logger = structlog.get_logger(__name__) # Initialize logger at module level
 
@@ -22,7 +25,7 @@ class HTTPMCPClient(BaseMCPClient):
     It uses aiohttp.ClientSession for making asynchronous HTTP requests.
     """
 
-    def __init__(self, service_record: MCPServiceRecord, config: Config, aiohttp_session: Optional[aiohttp.ClientSession] = None):
+    def __init__(self, service_record: MCPServiceRecord, config: Config, aiohttp_session: aiohttp.ClientSession | None = None):
         super().__init__(service_record, config, aiohttp_session)
         self._is_connected_status = False # For HTTP, connection is per-request, but we can simulate a state.
         self.logger = logger.bind(server_name=service_record.name, server_endpoint=str(service_record.endpoint), transport="http")
@@ -110,9 +113,9 @@ class HTTPMCPClient(BaseMCPClient):
             return True # Session is open and ready
         return self._is_connected_status # Fallback to simulated status
 
-    async def _send_request_raw(self, request_payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _send_request_raw(self, request_payload: dict[str, Any]) -> dict[str, Any]:
         session = await self._get_session()
-        from .. import __version__ # Dynamically import version
+        from .. import __version__  # Dynamically import version
 
         headers = {
             "Content-Type": "application/json",
@@ -175,13 +178,13 @@ class HTTPMCPClient(BaseMCPClient):
 
 
     # Example of a non-JSONRPC HTTP GET method, if needed for /capabilities
-    async def get_http_capabilities(self) -> Dict[str, Any]:
+    async def get_http_capabilities(self) -> dict[str, Any]:
         """
         Fetches capabilities from a dedicated HTTP GET endpoint (e.g., /capabilities),
         if the server provides one outside of JSONRPC.
         """
         session = await self._get_session()
-        from .. import __version__ # Dynamically import version
+        from .. import __version__  # Dynamically import version
         headers = {"Accept": "application/json", "User-Agent": f"MCPVacuumAgent/{__version__} ({self.config.agent_name})"}
         if self._current_token:
             headers["Authorization"] = f"Bearer {self._current_token.access_token}"
