@@ -58,7 +58,10 @@ class AuthConfig(BaseModel): # Remains BaseModel
     dynamic_client_metadata: DynamicClientRegistrationSettings = Field(default_factory=lambda: DynamicClientRegistrationSettings(), description="Metadata to use for dynamic client registration.")
 
     preconfigured_credentials_file: Path | None = Field(None, description="Path to pre-configured credentials file.")
-    token_storage_method: str = Field(default="keyring", description="Method for storing tokens ('keyring', 'file').")
+    token_storage_method: str = Field(
+        default="keyring",
+        pattern="^keyring$",  # Only allow keyring for now until file storage is implemented
+        description="Method for storing tokens (currently only 'keyring' is supported).")
     keyring_service_name: str = Field(default="mcp_vacuum_tokens", description="Service name for keyring storage.")
     encrypted_token_file_path: Path | None = Field(None, description="Path for encrypted token file.")
 

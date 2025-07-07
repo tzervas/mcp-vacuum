@@ -44,18 +44,35 @@ class MCPServerInfo(BasePydanticModel): # Used for dynamic client registration c
     registration_endpoint: HttpUrl | None = None # The specific registration endpoint for this server, if supported
     endpoint: HttpUrl | None = None # Main server endpoint, useful context for registration if needed
 
-class MCPCapabilities(BasePydanticModel): # Response from /capabilities endpoint
-    # This model structure depends on how MCP servers expose capabilities.
-    # Assuming a simple list of tool names for now.
-    tools: list[str] = Field(default_factory=list)
-    # Could also include resources, prompts, etc.
-    # Example:
-    # resources: List[str] = Field(default_factory=list)
-    # prompts: List[str] = Field(default_factory=list)
-    # supported_auth_methods: List[AuthMethod] = Field(default_factory=list)
+class MCPCapabilities(BasePydanticModel):
+    """Response from /capabilities endpoint.
+    
+    This model includes standard MCP capabilities fields and preserves any unknown
+    fields in extra_fields for potential future use or debugging.
+    """
+    tools: list[str] = Field(default_factory=list, description="List of available tool names")
+    resources: list[str] = Field(default_factory=list, description="List of available resource types")
+    prompts: list[str] = Field(default_factory=list, description="List of supported prompt types")
+    supported_auth_methods: list[AuthMethod] = Field(
+        default_factory=list,
+        description="List of authentication methods supported by the server"
+    )
+    # Store any extra fields returned by server for future compatibility
+    extra_fields: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional fields returned by the server that aren't part of the standard model"
+    )
+
+    def __init__(self, **data):
+        # Extract standard fields
+        standard_fields = {
+            field: data.pop(field)
+            for field in ['tools', 'resources', 'prompts', 'supported_auth_methods']
+            if field in data
+        }
+        # Store remaining fields in extra_fields
+        standard_fields['extra_fields'] = data
+        super().__init__(**standard_fields)
 
     class Config:
-        extra = 'ignore' # Changed from 'allow' to 'ignore'
-                         # This will ignore any fields not defined in the model,
-                         # which is generally safer than 'allow' if the extra fields are not needed.
-                         # If specific extra fields become important, they should be added to the model.
+        extra = 'allow'  # Allow extra fields during parsing
