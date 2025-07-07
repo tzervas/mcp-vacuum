@@ -4,7 +4,7 @@ Secure storage for OAuth 2.1 tokens and client credentials.
 import abc
 import base64
 import json
-from typing import Any
+from typing import Any, TypeVar
 
 import keyring  # type: ignore[import-not-found]
 import structlog  # type: ignore[import-not-found]
@@ -16,6 +16,8 @@ from ..config import AuthConfig  # For keyring service name, file paths
 from ..models.auth import ClientCredentials, OAuth2Token
 
 logger = structlog.get_logger(__name__)
+
+TokenType = TypeVar('TokenType', OAuth2Token, ClientCredentials)
 
 class TokenStorageError(Exception):
     """Base class for token storage errors."""
@@ -115,9 +117,12 @@ class KeyringTokenStorage(BaseTokenStorage):
                 f"Failed to store item in keyring for key '{key}': {e}"
             ) from e
 
+    # Use TypeVar to enforce type safety for stored tokens
+    TokenT = TypeVar('TokenT', OAuth2Token, ClientCredentials)
+
     async def _get_item(
-        self, key: str, item_model: type[OAuth2Token] | type[ClientCredentials]
-    ) -> Any | None:  # Actually Optional[OAuth2Token] or Optional[ClientCredentials]
+        self, key: str, item_model: type[TokenT]
+    ) -> TokenT | None:
         try:
             item_json = keyring.get_password(self.service_name, key)
             if item_json:
