@@ -44,8 +44,15 @@ def generate_pkce_challenge_pair(code_challenge_method: str = "S256") -> PKCECha
     verifier_bytes = secrets.token_bytes(96)
     code_verifier = base64.urlsafe_b64encode(verifier_bytes).decode('ascii').rstrip('=')
     
+    # Ensure exactly 128 characters even if urlsafe_b64encode behaves unexpectedly
+    if len(code_verifier) > 128:
+        code_verifier = code_verifier[:128]
+    elif len(code_verifier) < 128:
+        # Pad with 'A' up to 128 chars if encoding produces less (should never happen)
+        code_verifier = code_verifier.ljust(128, 'A')
+
     # The code_verifier is now guaranteed to be exactly 128 characters
-    # Let PKCEChallenge handle the validation
+    # Let PKCEChallenge handle any other validation
 
     if code_challenge_method == "S256":
         # Transform the code verifier using SHA256
