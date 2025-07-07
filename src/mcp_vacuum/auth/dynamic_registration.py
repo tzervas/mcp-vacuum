@@ -163,7 +163,7 @@ class DynamicClientRegistrar:
             # None if not set, will be cleaned
             "logo_uri": str(meta_cfg.logo_uri) if meta_cfg.logo_uri else None,
             # None if not set, will be cleaned
-            "contacts": meta_cfg.contacts if meta_cfg.contacts else None,
+            "contacts": meta_cfg.contacts or None,
             "software_id": software_id or f"mcp-vacuum-{server_info.id}",
             "software_version": software_version or app_version,
         }
