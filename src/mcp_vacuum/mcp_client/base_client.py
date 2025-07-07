@@ -6,7 +6,7 @@ import asyncio
 import random
 import uuid
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, List
 
 import aiohttp  # type: ignore[import-not-found]
 import structlog # Added import for structlog

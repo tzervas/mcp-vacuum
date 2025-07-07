@@ -1,8 +1,15 @@
 import time
+from enum import Enum
 
 from pydantic import Field, HttpUrl
 
 from .common import BasePydanticModel
+
+
+class AuthMethod(str, Enum):
+    """Enum for supported authentication methods."""
+    OAUTH2 = 'oauth2'
+    NONE = 'none'
 
 
 class PKCEChallenge(BasePydanticModel):
