@@ -237,13 +237,6 @@ class AuthenticationAgent(MCPVacuumBaseAgent):
 
     async def stop(self) -> None:  # ADK lifecycle
         self.logger.info("AuthenticationAgent stopping (ADK lifecycle)...")
-        # Clean up token manager if it holds resources (e.g. sessions,
-        # though unlikely for manager itself)
-        if self.token_manager and hasattr(
-            self.token_manager, "close"
-        ):  # If TokenManager needs cleanup
-            # await self.token_manager.close()
-            pass
         await super().stop()
         self.logger.info("AuthenticationAgent stopped (ADK lifecycle).")
 
