@@ -40,26 +40,12 @@ def generate_pkce_challenge_pair(code_challenge_method: str = "S256") -> PKCECha
     # Generate a verifier of exactly 128 characters from a 96-byte token.
     # This ensures maximum length and entropy as per common practice.
     # The model PKCEChallenge will validate if the length is within 43-128.
-    code_verifier = secrets.token_urlsafe(96)
-    # Ensure it's exactly 128 characters. token_urlsafe(96) usually yields 128 chars.
-    # If it were to yield slightly less in some edge cases, the model validation would catch it.
-    # Slicing like `[:128]` is okay if the source string is >= 128, but if `token_urlsafe(96)`
-    # was guaranteed to be *at least* 128, that would be safer.
-    # For now, assume token_urlsafe(96) produces 128 chars.
-    # If a specific length is needed, other generation methods might be better,
-    # or adjust the input bytes to `token_urlsafe`.
-    # For PKCE, the verifier *must* be between 43 and 128 chars.
-    # Let's ensure the generated verifier adheres to this.
-    # A 96-byte token results in a 128-character Base64 URL-safe string.
-    # (96 bytes * 8 bits/byte) / (6 bits/char) = 128 characters.
-
-    if len(code_verifier) < 43 or len(code_verifier) > 128:
-        # This case should ideally not be reached if secrets.token_urlsafe
-        # behaves as expected.
-        # Fallback or error if generated length is outside PKCE spec.
-        # For robustness, one might regenerate or raise an internal error.
-        # Here, we'll rely on the Pydantic model validation in PKCEChallenge.
-        pass
+    # 96 bytes will give us a 128-character string: (96 * 8) / 6 = 128 chars
+    verifier_bytes = secrets.token_bytes(96)
+    code_verifier = base64.urlsafe_b64encode(verifier_bytes).decode('ascii').rstrip('=')
+    
+    # The code_verifier is now guaranteed to be exactly 128 characters
+    # Let PKCEChallenge handle the validation
 
     if code_challenge_method == "S256":
         # Transform the code verifier using SHA256
