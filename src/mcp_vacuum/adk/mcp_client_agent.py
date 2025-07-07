@@ -62,9 +62,7 @@ class MCPClientAgent(MCPVacuumBaseAgent):
             self.logger.info("Creating shared aiohttp session for MCPClientAgent.")
             client_cfg = self.app_config.mcp_client
             ssl_context = None
-            if client_cfg.ssl_verify:  # General SSL verification setting
-                pass  # Default aiohttp handling
-            else:
+            if not client_cfg.ssl_verify:
                 self.logger.warning(
                     "SSL verification is DISABLED for shared aiohttp session. "
                     "This is insecure."
