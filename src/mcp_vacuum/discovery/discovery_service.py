@@ -105,7 +105,7 @@ class MCPDiscoveryService:
                                 yield record
 
                             mdns_queue.task_done()
-                        except TimeoutError:
+                        except asyncio.TimeoutError:
                             if not browser.running: # browser might stop if aiozc is closed early
                                 break
                             continue

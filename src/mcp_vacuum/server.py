@@ -52,7 +52,7 @@ class AuthCredentials(BaseModel):
     custom_data: dict[str, str] | None = None
 
     @validator("method", pre=True)
-    def parse_auth_method(self, v):
+    def parse_auth_method(cls, v):
         """Parse auth method from string if needed."""
         if isinstance(v, str):
             return AuthMethod(v)
@@ -90,7 +90,7 @@ class MCPServer(BaseModel):
         use_enum_values = True
 
     @validator("endpoint")
-    def validate_endpoint(self, v):
+    def validate_endpoint(cls, v):
         """Validate endpoint URL format."""
         try:
             parsed = urlparse(v)

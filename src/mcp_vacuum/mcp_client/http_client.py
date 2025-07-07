@@ -169,7 +169,7 @@ class HTTPMCPClient(BaseMCPClient):
         except aiohttp.ClientConnectorError as e:
             self.logger.error("Client connector error", error_os_error=e.os_error, error_str=str(e))
             raise MCPConnectionError(f"Connection failed to {self.service_record.endpoint}: {e.os_error or str(e)}") from e
-        except TimeoutError as e: # Catches aiohttp.ServerTimeoutError, ClientTimeoutError
+        except asyncio.TimeoutError as e: # Catches aiohttp.ServerTimeoutError, ClientTimeoutError
             self.logger.error("Request timed out", endpoint=str(self.service_record.endpoint), timeout_total=request_timeout_seconds)
             raise MCPTimeoutError(f"Request to {self.service_record.endpoint} timed out after {request_timeout_seconds}s.") from e
         except aiohttp.ClientError as e: # Catch other aiohttp client errors
@@ -210,7 +210,7 @@ class HTTPMCPClient(BaseMCPClient):
                 else:
                     self.logger.warning("Failed to get /capabilities", status=response.status, reason=response.reason, response_body=response_text[:500])
                     raise MCPConnectionError(f"Failed to fetch capabilities from {capabilities_url}: HTTP {response.status}")
-        except TimeoutError as e:
+        except asyncio.TimeoutError as e:
             self.logger.error("Timeout fetching /capabilities", url=capabilities_url)
             raise MCPTimeoutError(f"Request to {capabilities_url} timed out.") from e
         except aiohttp.ClientError as e:
