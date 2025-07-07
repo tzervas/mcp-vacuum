@@ -23,21 +23,24 @@ MCP Vacuum is a Python 3.12-based AI agent designed to automate the discovery of
   - Cache discovery results with a configurable TTL (default: 600 seconds).
   - Support concurrent scanning with resource limits (e.g., max 50 workers).
   - Filter discovered servers by allowed networks (e.g., "192.168.1.0/24").
+  - Async DNS resolution for improved performance.
+  - Support for overlapping discovery runs with proper resource management.
 - **Output**: List of MCP servers with connection details (e.g., `MCPServiceRecord`).
 
 ### Authentication
 - **Method**: OAuth 2.1 with PKCE (RFC 7636).
 - **Features**:
   - Dynamic client registration per RFC 7591.
-  - Secure token storage using system keyring (default) or encrypted file storage.
+  - Secure token storage using system keyring (default) or encrypted file storage with enhanced error handling.
   - Automatic token refresh with short-lived access tokens (15-60 minutes).
+  - Fixed 128-character PKCE verifiers for optimal security.
 - **Security**:
   - Exact redirect URI validation.
   - State parameter for CSRF protection.
   - Memory-only storage for access tokens.
 
 ### MCP Interaction
-- **Protocol**: JSONRPC 2.0 over HTTP.
+- **Protocol**: JSON-RPC 2.0 over HTTP.
 - **Operations**:
   - List available tools via `listTools` method.
   - Retrieve tool schemas using `getToolSchema` method.
@@ -48,6 +51,9 @@ MCP Vacuum is a Python 3.12-based AI agent designed to automate the discovery of
 ### Schema Conversion
 - **Input**: MCP tool schemas in JSON Schema Draft 7.
 - **Output**: Kagent CRDs in OpenAPI v3 (YAML format).
+- **Features**:
+  - Fail-fast option for immediate error reporting during conversion.
+  - Standardized PEP 604 type annotations for better code quality.
 - **Conversion Mapping**:
   - **MCP Server → Kagent ToolServer**:
     - `server.name` → `metadata.name`: Lowercase, Kubernetes-compliant (e.g., `mcp-server-1`).
