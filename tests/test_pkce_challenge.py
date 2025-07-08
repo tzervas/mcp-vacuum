@@ -13,178 +13,158 @@ from pydantic import ValidationError
 from mcp_vacuum.models.auth import PKCEChallenge
 
 
+@pytest.fixture
+def valid_challenge():
+    """Fixture providing a valid PKCE challenge string."""
+    return "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+
+
+@pytest.fixture
+def valid_verifier():
+    """Fixture providing a simple valid verifier string."""
+    return "A" * 43
+
+
 class TestPKCEChallengeValidation:
     """Test PKCE Challenge model validation for code verifier characters."""
 
-    def test_valid_code_verifier_characters(self):
+    @pytest.mark.parametrize("verifier", [
+        pytest.param("A" * 43, id="uppercase-min-length"),
+        pytest.param("a" * 43, id="lowercase-min-length"),
+        pytest.param("0" * 43, id="digits-min-length"),
+        pytest.param("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs", id="mixed-exact-length"),
+        pytest.param("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm-._~", id="all-valid-chars"),
+        pytest.param(
+            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef-._~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef-._~0123456789ABCDEFGHIJKLMNOP",
+            id="max-length"
+        ),
+        pytest.param("abc-def_ghi.jkl~mno" + "p" * 24, id="special-chars-mix"),
+        pytest.param("test-verifier_with.valid~chars" + "0" * 12, id="realistic-example")
+    ])
+    def test_valid_code_verifier_characters(self, verifier, valid_challenge):
         """Test that valid code verifier characters are accepted."""
-        # Valid characters: [A-Za-z0-9\-._~]
-        valid_verifiers = [
-            # Basic alphanumeric
-            "A" * 43,  # Minimum length with uppercase
-            "a" * 43,  # Minimum length with lowercase
-            "0" * 43,  # Minimum length with digits
-            
-            # Mixed valid characters
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr",  # 42 chars, one short
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs",  # 43 chars exactly
-            
-            # Include all valid unreserved characters
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm-._~",  # 43 chars with special chars
-            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef-._~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef-._~0123456789ABCDEFGHIJKLMNOP",  # 128 chars max
-            
-            # Hyphen, underscore, dot, tilde combinations
-            "abc-def_ghi.jkl~mno" + "p" * 24,  # 43 chars with all valid special chars
-            "test-verifier_with.valid~chars" + "0" * 12,  # 43 chars realistic example
-        ]
-        
-        valid_challenge = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"  # Example valid challenge
-        
-        for verifier in valid_verifiers:
-            # Should not raise ValidationError
-            pkce = PKCEChallenge(
+        # Should not raise ValidationError
+        pkce = PKCEChallenge(
+            code_verifier=verifier,
+            code_challenge=valid_challenge,
+            code_challenge_method="S256"
+        )
+        assert pkce.code_verifier == verifier
+        assert len(pkce.code_verifier) >= 43
+        assert len(pkce.code_verifier) <= 128
+
+    @pytest.mark.parametrize("verifier", [
+        pytest.param(" " + "A" * 42, id="leading-space"),
+        pytest.param("A" * 42 + " ", id="trailing-space"),
+        pytest.param("A" * 21 + " " + "A" * 21, id="middle-space"),
+        pytest.param("test verifier with spaces" + "A" * 17, id="multiple-spaces"),
+        pytest.param("A A A A A A A A A A A A A A A A A A A A A A", id="many-spaces")
+    ])
+    def test_invalid_code_verifier_with_spaces(self, verifier, valid_challenge):
+        """Test that code verifier with spaces raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            PKCEChallenge(
                 code_verifier=verifier,
                 code_challenge=valid_challenge,
                 code_challenge_method="S256"
             )
-            assert pkce.code_verifier == verifier
-            assert len(pkce.code_verifier) >= 43
-            assert len(pkce.code_verifier) <= 128
+        # Check that the error message mentions invalid characters
+        assert "code_verifier" in str(exc_info.value).lower()
 
-    def test_invalid_code_verifier_with_spaces(self):
-        """Test that code verifier with spaces raises ValidationError."""
-        invalid_verifiers_with_spaces = [
-            " " + "A" * 42,  # Leading space
-            "A" * 42 + " ",  # Trailing space
-            "A" * 21 + " " + "A" * 21,  # Space in middle
-            "test verifier with spaces" + "A" * 17,  # Multiple spaces
-            "A A A A A A A A A A A A A A A A A A A A A A",  # Many spaces (43 chars)
-        ]
-        
-        valid_challenge = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
-        
-        for verifier in invalid_verifiers_with_spaces:
-            with pytest.raises(ValidationError) as exc_info:
-                PKCEChallenge(
-                    code_verifier=verifier,
-                    code_challenge=valid_challenge,
-                    code_challenge_method="S256"
-                )
-            # Check that the error message mentions invalid characters
-            assert "code_verifier" in str(exc_info.value).lower()
-
-    def test_invalid_code_verifier_with_unicode_non_ascii(self):
+    @pytest.mark.parametrize("verifier", [
+        pytest.param("café" + "A" * 39, id="accented-e"),
+        pytest.param("résumé" + "A" * 37, id="multiple-accents"),
+        pytest.param("naïve" + "A" * 38, id="accented-i"),
+        pytest.param("京都" + "A" * 41, id="japanese"),
+        pytest.param("🔐" + "A" * 39, id="emoji"),
+        pytest.param("Москва" + "A" * 37, id="cyrillic"),
+        pytest.param("αβγδε" + "A" * 38, id="greek"),
+        pytest.param("مرحبا" + "A" * 38, id="arabic")
+    ])
+    def test_invalid_code_verifier_with_unicode_non_ascii(self, verifier, valid_challenge):
         """Test that code verifier with Unicode non-ASCII characters raises ValidationError."""
-        invalid_verifiers_unicode = [
-            "café" + "A" * 39,  # Contains é (U+00E9)
-            "résumé" + "A" * 37,  # Contains é and é
-            "naïve" + "A" * 38,  # Contains ï (U+00EF)
-            "京都" + "A" * 41,  # Japanese characters
-            "🔐" + "A" * 39,  # Emoji (U+1F510)
-            "Москва" + "A" * 37,  # Cyrillic characters
-            "αβγδε" + "A" * 38,  # Greek characters
-            "مرحبا" + "A" * 38,  # Arabic characters
-        ]
-        
-        valid_challenge = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
-        
-        for verifier in invalid_verifiers_unicode:
-            with pytest.raises(ValidationError) as exc_info:
-                PKCEChallenge(
-                    code_verifier=verifier,
-                    code_challenge=valid_challenge,
-                    code_challenge_method="S256"
-                )
-            # Check that the error message mentions invalid characters
-            assert "code_verifier" in str(exc_info.value).lower()
-
-    def test_invalid_code_verifier_with_forbidden_symbols(self):
-        """Test that code verifier with forbidden symbols raises ValidationError."""
-        invalid_verifiers_symbols = [
-            "test!" + "A" * 38,  # Exclamation mark
-            "test@domain.com" + "A" * 28,  # At symbol
-            "test#hashtag" + "A" * 31,  # Hash symbol
-            "test$money" + "A" * 33,  # Dollar sign
-            "test%percent" + "A" * 31,  # Percent sign
-            "test^caret" + "A" * 33,  # Caret
-            "test&ampersand" + "A" * 29,  # Ampersand
-            "test*asterisk" + "A" * 30,  # Asterisk
-            "test(parenthesis)" + "A" * 26,  # Parentheses
-            "test+plus" + "A" * 34,  # Plus sign
-            "test=equals" + "A" * 32,  # Equals sign
-            "test[bracket]" + "A" * 30,  # Square brackets
-            "test{brace}" + "A" * 32,  # Curly braces
-            "test|pipe" + "A" * 34,  # Pipe
-            "test\\backslash" + "A" * 29,  # Backslash
-            "test:colon" + "A" * 33,  # Colon
-            "test;semicolon" + "A" * 29,  # Semicolon
-            'test"quote' + "A" * 33,  # Double quote
-            "test'apostrophe" + "A" * 28,  # Single quote/apostrophe
-            "test<less>" + "A" * 33,  # Angle brackets
-            "test,comma" + "A" * 33,  # Comma
-            "test?question" + "A" * 30,  # Question mark
-            "test/slash" + "A" * 33,  # Forward slash
-        ]
-        
-        valid_challenge = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
-        
-        for verifier in invalid_verifiers_symbols:
-            with pytest.raises(ValidationError) as exc_info:
-                PKCEChallenge(
-                    code_verifier=verifier,
-                    code_challenge=valid_challenge,
-                    code_challenge_method="S256"
-                )
-            # Check that the error message mentions invalid characters
-            assert "code_verifier" in str(exc_info.value).lower()
-
-    def test_invalid_code_verifier_mixed_invalid_characters(self):
-        """Test code verifier with mixed invalid characters."""
-        invalid_verifiers_mixed = [
-            "test with spaces and! symbols" + "A" * 13,  # Spaces and symbols
-            "café@example.com" + "A" * 27,  # Unicode and symbols
-            "test 123!@#$%^&*()" + "A" * 26,  # Spaces and multiple symbols
-            " unicode_café_with_spaces " + "A" * 16,  # Leading/trailing spaces with unicode
-        ]
-        
-        valid_challenge = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
-        
-        for verifier in invalid_verifiers_mixed:
-            with pytest.raises(ValidationError) as exc_info:
-                PKCEChallenge(
-                    code_verifier=verifier,
-                    code_challenge=valid_challenge,
-                    code_challenge_method="S256"
-                )
-            # Check that the error message mentions invalid characters
-            assert "code_verifier" in str(exc_info.value).lower()
-
-    def test_valid_code_challenge_characters(self):
-        """Test that code challenge validation doesn't produce false positives."""
-        # Code challenges are base64url encoded, so they have a more restricted character set
-        # Valid base64url characters: [A-Za-z0-9\-_] (no padding)
-        valid_challenges = [
-            "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",  # Standard SHA256 challenge
-            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",  # Another valid challenge
-            "A" * 43,  # Minimum length
-            "a" * 43,  # Lowercase
-            "0" * 43,  # Numbers
-            "A-_" * 14 + "A",  # 43 chars with valid base64url chars
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm" + "0-_",  # Mixed valid chars
-        ]
-        
-        valid_verifier = "A" * 43  # Simple valid verifier
-        
-        for challenge in valid_challenges:
-            # Should not raise ValidationError
-            pkce = PKCEChallenge(
-                code_verifier=valid_verifier,
-                code_challenge=challenge,
+        with pytest.raises(ValidationError) as exc_info:
+            PKCEChallenge(
+                code_verifier=verifier,
+                code_challenge=valid_challenge,
                 code_challenge_method="S256"
             )
-            assert pkce.code_challenge == challenge
-            assert len(pkce.code_challenge) >= 43
-            assert len(pkce.code_challenge) <= 128
+        # Check that the error message mentions invalid characters
+        assert "code_verifier" in str(exc_info.value).lower()
+
+    @pytest.mark.parametrize("verifier", [
+        pytest.param("test!" + "A" * 38, id="exclamation"),
+        pytest.param("test@domain.com" + "A" * 28, id="at-symbol"),
+        pytest.param("test#hashtag" + "A" * 31, id="hash"),
+        pytest.param("test$money" + "A" * 33, id="dollar"),
+        pytest.param("test%percent" + "A" * 31, id="percent"),
+        pytest.param("test^caret" + "A" * 33, id="caret"),
+        pytest.param("test&ampersand" + "A" * 29, id="ampersand"),
+        pytest.param("test*asterisk" + "A" * 30, id="asterisk"),
+        pytest.param("test(parenthesis)" + "A" * 26, id="parentheses"),
+        pytest.param("test+plus" + "A" * 34, id="plus"),
+        pytest.param("test=equals" + "A" * 32, id="equals"),
+        pytest.param("test[bracket]" + "A" * 30, id="square-brackets"),
+        pytest.param("test{brace}" + "A" * 32, id="curly-braces"),
+        pytest.param("test|pipe" + "A" * 34, id="pipe"),
+        pytest.param("test\\backslash" + "A" * 29, id="backslash"),
+        pytest.param("test:colon" + "A" * 33, id="colon"),
+        pytest.param("test;semicolon" + "A" * 29, id="semicolon"),
+        pytest.param('test"quote' + "A" * 33, id="double-quote"),
+        pytest.param("test'apostrophe" + "A" * 28, id="single-quote"),
+        pytest.param("test<less>" + "A" * 33, id="angle-brackets"),
+        pytest.param("test,comma" + "A" * 33, id="comma"),
+        pytest.param("test?question" + "A" * 30, id="question-mark"),
+        pytest.param("test/slash" + "A" * 33, id="forward-slash")
+    ])
+    def test_invalid_code_verifier_with_forbidden_symbols(self, verifier, valid_challenge):
+        """Test that code verifier with forbidden symbols raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            PKCEChallenge(
+                code_verifier=verifier,
+                code_challenge=valid_challenge,
+                code_challenge_method="S256"
+            )
+        # Check that the error message mentions invalid characters
+        assert "code_verifier" in str(exc_info.value).lower()
+
+    @pytest.mark.parametrize("verifier", [
+        pytest.param("test with spaces and! symbols" + "A" * 13, id="spaces-and-symbols"),
+        pytest.param("café@example.com" + "A" * 27, id="unicode-and-symbols"),
+        pytest.param("test 123!@#$%^&*()" + "A" * 26, id="spaces-and-multiple-symbols"),
+        pytest.param(" unicode_café_with_spaces " + "A" * 16, id="spaces-with-unicode")
+    ])
+    def test_invalid_code_verifier_mixed_invalid_characters(self, verifier, valid_challenge):
+        """Test code verifier with mixed invalid characters."""
+        with pytest.raises(ValidationError) as exc_info:
+            PKCEChallenge(
+                code_verifier=verifier,
+                code_challenge=valid_challenge,
+                code_challenge_method="S256"
+            )
+        # Check that the error message mentions invalid characters
+        assert "code_verifier" in str(exc_info.value).lower()
+
+    @pytest.mark.parametrize("challenge", [
+        pytest.param("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk", id="standard-sha256"),
+        pytest.param("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", id="alternate-valid"),
+        pytest.param("A" * 43, id="uppercase-min"),
+        pytest.param("a" * 43, id="lowercase-min"),
+        pytest.param("0" * 43, id="numbers-min"),
+        pytest.param("A-_" * 14 + "A", id="base64url-chars"),
+        pytest.param("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm" + "0-_", id="mixed-chars")
+    ])
+    def test_valid_code_challenge_characters(self, challenge, valid_verifier):
+        """Test that code challenge validation doesn't produce false positives."""
+        # Should not raise ValidationError
+        pkce = PKCEChallenge(
+            code_verifier=valid_verifier,
+            code_challenge=challenge,
+            code_challenge_method="S256"
+        )
+        assert pkce.code_challenge == challenge
+        assert len(pkce.code_challenge) >= 43
+        assert len(pkce.code_challenge) <= 128
 
     def test_length_validation_still_works(self):
         """Test that length validation still works alongside character validation."""
