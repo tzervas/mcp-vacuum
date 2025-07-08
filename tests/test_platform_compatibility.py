@@ -10,8 +10,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture
 async def mock_docker_client():
-    mock_client = AsyncMock(spec=docker.DockerClient)
-    return mock_client
+    return AsyncMock(spec=docker.DockerClient)
 
 @pytest.fixture
 def mock_keyring():
