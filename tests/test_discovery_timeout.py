@@ -32,8 +32,8 @@ async def test_mdns_discovery_timeout_handling(config):
     records = []
     async for record in service.discover_servers_mdns(timeout=1):
         records.append(record)
-    
-    assert len(records) == 0  # No records due to short timeout
+
+    assert not records
 
 
 async def test_mdns_service_info_request_timeout(config):
