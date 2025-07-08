@@ -161,23 +161,49 @@ class TestMCPServer:
             MCPServer(id="test9", endpoint="http://example.com#fragment")
         assert "URL fragments not allowed" in str(exc_info.value)
 
+    def _assert_server_properties(self, server_id: str, url: str, expected_host: str, expected_port: int, expected_secure: bool):
+        """Helper to test server properties.
+        
+        Args:
+            server_id: ID for the test server
+            url: Endpoint URL to test
+            expected_host: Expected hostname
+            expected_port: Expected port number
+            expected_secure: Expected security status
+        """
+        server = MCPServer(id=server_id, endpoint=url)
+        assert server.host == expected_host
+        assert server.port == expected_port
+        assert server.is_secure is expected_secure
+
     def test_server_properties(self):
         """Test server property methods work correctly."""
-        # Test HTTP server
-        server_http = MCPServer(id="http_server", endpoint="http://example.com:8080/api")
-        assert server_http.host == "example.com"
-        assert server_http.port == 8080
-        assert not server_http.is_secure
+        # Test HTTP server with explicit port
+        self._assert_server_properties(
+            "http_server",
+            "http://example.com:8080/api",
+            "example.com",
+            8080,
+            False
+        )
 
         # Test HTTPS server without explicit port
-        server_https = MCPServer(id="https_server", endpoint="https://secure.example.com/api")
-        assert server_https.host == "secure.example.com"
-        assert server_https.port == 443  # Default HTTPS port
-        assert server_https.is_secure
+        self._assert_server_properties(
+            "https_server",
+            "https://secure.example.com/api",
+            "secure.example.com",
+            443,  # Default HTTPS port
+            True
+        )
 
         # Test HTTP server without explicit port
-        server_http_default = MCPServer(id="http_default", endpoint="http://example.com/api")
-        assert server_http_default.port == 80  # Default HTTP port
+        self._assert_server_properties(
+            "http_default",
+            "http://example.com/api",
+            "example.com",
+            80,  # Default HTTP port
+            False
+        )
 
     def test_server_authentication_properties(self):
         """Test authentication-related properties."""
