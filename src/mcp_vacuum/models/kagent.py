@@ -69,7 +69,7 @@ class ConversionMetadataModel(BasePydanticModel):
     """Metadata about the conversion process."""
     source_schema_version: str
     source_system: str
-    conversion_timestamp: str
+    conversion_timestamp: datetime
     validation_result: Optional[ValidationResult] = None
     original_tool_name: str
     conversion_version: str
