@@ -21,6 +21,9 @@ class AuthMethod(str, Enum):
     NONE = "none"
     OAUTH2_PKCE = "oauth2_pkce"
     TOKEN = "token"
+    CERTIFICATE = "certificate"
+    USERNAME_PASSWORD = "username_password"
+    OAUTH2 = "oauth2"
     MTLS = "mtls" # Mutual TLS
     CUSTOM = "custom"
 

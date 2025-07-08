@@ -1,0 +1,5 @@
+- Verify if `google-adk` is installed in the virtual environment by running `pip list` while the environment is activated.
+- Ensure the virtual environment is activated by using `.venv\Scripts\activate`.
+- If not already installed, manually install `google-adk` using `pip` inside the virtual environment.
+- Double-check the PYTHONPATH and ensure it includes the virtual environment's site-packages.
+- If problems persist, consider restarting the terminal session or recreating the virtual environment.
