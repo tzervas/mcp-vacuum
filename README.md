@@ -7,7 +7,7 @@ MCP Vacuum is an AI agent developed in Python 3.12, designed to automatically di
 The MCP Vacuum agent performs a sequence of operations:
 1.  **Discovery**: Scans the local network using protocols like mDNS (SSDP planned) to find active MCP servers.
 2.  **Authentication**: For each discovered server, it attempts to authenticate. This primarily uses OAuth 2.1 with PKCE, supporting dynamic client registration (RFC 7591). Tokens are securely stored (e.g., via system keyring) and managed with auto-refresh.
-3.  **MCP Interaction**: Once authenticated, it communicates with the MCP server (via JSONRPC 2.0 over HTTP) to list available tools and retrieve their schemas.
+3.  **MCP Interaction**: Once authenticated, it communicates with the MCP server (via JSON-RPC 2.0 over HTTP) to list available tools and retrieve their schemas.
 4.  **Schema Conversion**: The MCP tool schemas (JSON Schema Draft 7) are then transformed into Kagent Custom Resource Definition (CRD) compatible format (OpenAPI v3). This includes metadata mapping, name sanitization, categorization, and risk assessment.
 5.  **Output**: The Kagent schemas can then be used to integrate MCP tools into Kagent-based workflows.
 
@@ -18,7 +18,7 @@ The agent is designed with resilience, featuring retry mechanisms and circuit br
 *   **Automated Network Discovery**: Employs mDNS for discovering MCP servers (SSDP planned).
 *   **Secure OAuth 2.1 Authentication**: Implements Authorization Code Flow with PKCE (RFC 7636) and Dynamic Client Registration (RFC 7591).
 *   **Secure Token Management**: Securely stores OAuth tokens (using system keyring by default) with automatic refresh capabilities.
-*   **JSONRPC 2.0 Client**: Robust client for interacting with MCP servers over HTTP, with built-in retries and circuit breaker.
+*   **JSON-RPC 2.0 Client**: Robust client for interacting with MCP servers over HTTP, with built-in retries and circuit breaker.
 *   **Schema Conversion Engine**: Transforms MCP tool schemas (JSON Schema) to Kagent CRD format (OpenAPI v3), including:
     *   Metadata mapping (labels, annotations).
     *   Kubernetes-compliant name sanitization.

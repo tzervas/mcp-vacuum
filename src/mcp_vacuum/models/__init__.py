@@ -1,24 +1,6 @@
 """
 Pydantic models for MCP Vacuum project.
 """
-from .common import (
-    AuthMethod,
-    AuthenticationMetadata,
-    BasePydanticModel,
-    MCPAnnotations, # Corrected: MCPAnnotation removed
-    MCPCapability,
-    MCPCapabilityType,
-    RiskLevel,
-    ToolCategory,
-    TransportType,
-    KagentCRDSchema,
-)
-from .mcp import (
-    MCPCapabilities,
-    MCPServiceRecord,
-    MCPServerInfo,
-    MCPTool,
-)
 # from .kagent import ( # Commented out due to ModuleNotFoundError: No module named 'mcp_vacuum.models.kagent'
 #     ConversionMetadataModel,
 #     ConversionResult,
@@ -31,7 +13,7 @@ from .mcp import (
 #     ValidationSeverity,
 # )
 from .auth import (
-    AuthMethod, # Re-exporting
+    AuthMethod,  # Re-exporting
     AuthorizationCodeResponse,
     ClientCredentials,
     OAuth2ClientConfig,
@@ -39,6 +21,24 @@ from .auth import (
     OAuthError,
     PKCEChallenge,
     TokenRequest,
+)
+from .common import (
+    AuthenticationMetadata,
+    AuthMethod,
+    BasePydanticModel,
+    KagentCRDSchema,
+    MCPAnnotations,  # Corrected: MCPAnnotation removed
+    MCPCapability,
+    MCPCapabilityType,
+    RiskLevel,
+    ToolCategory,
+    TransportType,
+)
+from .mcp import (
+    MCPCapabilities,
+    MCPServerInfo,
+    MCPServiceRecord,
+    MCPTool,
 )
 
 __all__ = [
@@ -59,8 +59,8 @@ __all__ = [
     "MCPCapabilities",
     "MCPCapability",
     "MCPCapabilityType",
-    "MCPServiceRecord",
     "MCPServerInfo",
+    "MCPServiceRecord",
     "MCPTool",
     "OAuth2ClientConfig",
     "OAuth2Token",

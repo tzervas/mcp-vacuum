@@ -1,17 +1,18 @@
 """CLI entry point for MCP Vacuum."""
 
 import asyncio
+import json
 import sys
-from typing import List, Optional, Dict, Any # Added Dict, Any
-from pathlib import Path # Added Path
+import traceback
+from pathlib import Path
+from typing import Any
 
-import click
-# structlog is initialized by OrchestrationAgent now
-# import structlog
+import click  # type: ignore[import-not-found]
 
-# from .agent import MCPVacuumAgent # Old agent
-from .adk.orchestration_agent import OrchestrationAgent # New ADK based agent
-from .config import Config
+from mcp_vacuum import __version__
+from mcp_vacuum.adk.orchestration_agent import \
+    OrchestrationAgent  # New ADK based agent
+from mcp_vacuum.config import Config
 
 
 @click.group()
@@ -22,21 +23,29 @@ from .config import Config
     envvar="MCP_VACUUM_CONFIG_FILE" # Allow setting via env var too
 )
 @click.option(
-    "--log-level", "-l",
-    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
-    default=None, # Default will be taken from Config object's default, then overridden if this is set
+    "--log-level",
+    "-l",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+    default=None,  # Default from Config, overridden if set
     help="Override the logging level (e.g., DEBUG, INFO).",
-    envvar="MCP_VACUUM_LOGGING_LEVEL"
+    envvar="MCP_VACUUM_LOGGING_LEVEL",
 )
 @click.option(
     "--log-format",
     type=click.Choice(["console", "json"], case_sensitive=False),
     default=None,
     help="Override logging format.",
-    envvar="MCP_VACUUM_LOGGING_FORMAT"
+    envvar="MCP_VACUUM_LOGGING_FORMAT",
 )
 @click.pass_context
-def cli(ctx: click.Context, config_file: Optional[str], log_level: Optional[str], log_format: Optional[str]) -> None:
+def cli(
+    ctx: click.Context,
+    config_file: str | None,
+    log_level: str | None,
+    log_format: str | None,
+) -> None:
     """MCP Vacuum - Discovers MCP servers, authenticates, and converts schemas."""
     try:
         if config_file:
@@ -46,18 +55,17 @@ def cli(ctx: click.Context, config_file: Optional[str], log_level: Optional[str]
             # Load from environment variables (and .env file if present)
             cfg = Config()
     except Exception as e:
-        import traceback
         click.echo(f"Error loading configuration: {e}", err=True)
         # Print traceback to stderr for more detailed debugging info
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
-    
+
     # Override from CLI options if provided
     if log_level:
         cfg.logging.level = log_level.upper()
     if log_format:
         cfg.logging.format = log_format.lower()
-    
+
     ctx.ensure_object(dict)
     ctx.obj["config"] = cfg
     # Note: Global logging is now set up by OrchestrationAgent when it's initialized.
@@ -65,25 +73,31 @@ def cli(ctx: click.Context, config_file: Optional[str], log_level: Optional[str]
 
 @cli.command()
 @click.option(
-    "--networks", "-n",
+    "--networks",
+    "-n",
     multiple=True,
-    help="Target networks/CIDRs to scan (e.g., '192.168.1.0/24'). Can be used multiple times. If not provided, uses defaults or discovered interfaces."
+    help=(
+        "Target networks/CIDRs to scan (e.g., '192.168.1.0/24'). "
+        "Can be used multiple times. If not provided, uses defaults "
+        "or discovered interfaces."
+    ),
 )
 @click.option(
-    "--output-file", "-o",
+    "--output-file",
+    "-o",
     type=click.Path(dir_okay=False, writable=True, resolve_path=True),
     help="Output file path for the generated Kagent schemas (JSON format)."
 )
 @click.pass_context
-def discover(ctx: click.Context, networks: List[str], output_file: Optional[str]) -> None:
+def discover(ctx: click.Context, networks: list[str], output_file: str | None) -> None:
     """Discovers MCP servers, authenticates, and generates Kagent schemas."""
     config: Config = ctx.obj["config"]
-    
+
     # OrchestrationAgent handles its own logging setup using the passed config.
     agent = OrchestrationAgent(app_config=config)
 
-    final_schemas: Optional[Dict[str, Any]] = None
-    summary: Optional[Dict[str, int]] = None
+    final_schemas: dict[str, Any] | None = None
+    summary: dict[str, int] | None = None
 
     async def run_workflow():
         nonlocal final_schemas, summary
@@ -106,7 +120,10 @@ def discover(ctx: click.Context, networks: List[str], output_file: Optional[str]
     except Exception as e:
         # Catch-all for unexpected errors from the workflow itself.
         # Agent methods should ideally log specifics.
-        click.echo(f"An unexpected error occurred during the discovery workflow: {e}", err=True)
+        click.echo(
+            f"An unexpected error occurred during the discovery workflow: {e}",
+            err=True,
+        )
         # Consider logging the full traceback here if log level is DEBUG
         # import traceback
         # if config.logging.level == "DEBUG":
@@ -116,30 +133,39 @@ def discover(ctx: click.Context, networks: List[str], output_file: Optional[str]
     if final_schemas is not None:
         if output_file:
             try:
-                with open(output_file, "w") as f:
+                output_path = Path(output_file)
+                with output_path.open("w") as f:
                     json.dump(final_schemas, f, indent=2)
                 click.echo(f"Kagent schemas written to {output_file}")
-            except IOError as e:
+            except OSError as e:
                 click.echo(f"Error writing output file {output_file}: {e}", err=True)
                 sys.exit(1)
         else:
             # Pretty print JSON to stdout
             click.echo(json.dumps(final_schemas, indent=2))
-            
+
     if summary:
         click.echo("\n--- Summary ---")
-        click.echo(f"  Discovered Servers:    {summary.get('discovered_servers', 0)}")
-        click.echo(f"  Authenticated Servers: {summary.get('authenticated_servers', 0)}")
-        click.echo(f"  Schemas Generated:     {summary.get('schemas_generated', 0)}")
+        click.echo(
+            f"  Discovered Servers:    {summary.get('discovered_servers', 0)}"
+        )
+        click.echo(
+            f"  Authenticated Servers: {summary.get('authenticated_servers', 0)}"
+        )
+        click.echo(
+            f"  Schemas Generated:     {summary.get('schemas_generated', 0)}"
+        )
     else:
-        click.echo("\nNo summary information available (workflow might have been interrupted or failed early).")
+        click.echo(
+            "\nNo summary information available (workflow might have been "
+            "interrupted or failed early)."
+        )
 
 
 @cli.command()
 @click.pass_context
 def version(ctx: click.Context) -> None:
     """Show version information."""
-    from . import __version__
     click.echo(f"MCP Vacuum v{__version__}")
 
 
@@ -148,7 +174,6 @@ def version(ctx: click.Context) -> None:
 def config_show(ctx: click.Context) -> None:
     """Show current configuration."""
     config = ctx.obj["config"]
-    import json
     click.echo(json.dumps(config.dict(), indent=2))
 
 

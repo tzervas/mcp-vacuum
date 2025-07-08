@@ -1,18 +1,19 @@
 """
 Unit tests for MCPDiscoveryService.
 """
-import pytest
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-from zeroconf import ServiceStateChange, Zeroconf # For type hints and constants
+import pytest
+from zeroconf import ServiceStateChange, Zeroconf  # For type hints and constants
+
 # from zeroconf.asyncio import AsyncServiceInfo as RealAsyncServiceInfo # For isinstance checks if needed
-
 from mcp_vacuum.config import Config, DiscoveryConfig
 from mcp_vacuum.discovery.discovery_service import MCPDiscoveryService
-from mcp_vacuum.models.mcp import MCPServiceRecord
 from mcp_vacuum.models.common import AuthMethod
+from mcp_vacuum.models.mcp import MCPServiceRecord
+
 
 @pytest.fixture
 def app_config_mdns_enabled():
