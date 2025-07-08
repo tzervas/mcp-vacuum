@@ -9,8 +9,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FunctionVisitor(ast.NodeVisitor):
-    def __init__(self):
+    def __init__(self, module_node):
         self.functions = []
+        self.module_node = module_node
         
     def visit_FunctionDef(self, node):
         # Extract function signature
@@ -29,13 +30,28 @@ class FunctionVisitor(ast.NodeVisitor):
         docstring = ast.get_docstring(node)
         
         # Extract dependencies from imports
-        dependencies = []
+        # Collect module-level imports
+        module_imports = []
+        for n in ast.walk(self.module_node):
+            if isinstance(n, ast.Import):
+                for name in n.names:
+                    module_imports.append(name.name)
+            elif isinstance(n, ast.ImportFrom):
+                if n.module:
+                    module_imports.append(n.module)
+
+        # Collect function-level imports
+        function_imports = []
         for ancestor in ast.walk(node):
             if isinstance(ancestor, ast.Import):
                 for name in ancestor.names:
-                    dependencies.append(name.name)
+                    function_imports.append(name.name)
             elif isinstance(ancestor, ast.ImportFrom):
-                dependencies.append(ancestor.module)
+                if ancestor.module:
+                    function_imports.append(ancestor.module)
+
+        # Combine and deduplicate
+        dependencies = list(set(module_imports + function_imports))
         
         function_info = {
             'name': node.name,
@@ -44,7 +60,7 @@ class FunctionVisitor(ast.NodeVisitor):
                 'return_type': return_type
             },
             'docstring': docstring,
-            'dependencies': list(set(dependencies))
+            'dependencies': dependencies
         }
         
         self.functions.append(function_info)
@@ -54,13 +70,14 @@ class FunctionVisitor(ast.NodeVisitor):
 def extract_functions_from_file(file_path: str) -> List[Dict]:
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            tree = ast.parse(f.read())
+            source_code = f.read()
             
-        visitor = FunctionVisitor()
-        visitor.visit(tree)
+        module_node = ast.parse(source_code)
+        visitor = FunctionVisitor(module_node)
+        visitor.visit(module_node)
         return visitor.functions
     except Exception as e:
-        logger.error(f"Error processing {file_path}: {str(e)}")
+        logger.error(f'Error processing {file_path}: {str(e)}')
         return []
 
 def get_python_files() -> List[str]:
@@ -79,7 +96,7 @@ def extract_branch_metadata() -> Dict:
     branches = [b.strip().replace('* ', '') for b in result.stdout.split('\n') if b.strip()]
     
     for branch in branches:
-        logger.info(f"Processing branch: {branch}")
+        logger.info(f'Processing branch: {branch}')
         
         # Checkout branch
         subprocess.run(['git', 'checkout', branch], 
@@ -108,10 +125,10 @@ def main():
     metadata = extract_branch_metadata()
     
     output_path = '.local/function-metadata.json'
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(metadata, f, indent=2)
     
-    logger.info(f"Function metadata written to {output_path}")
+    logger.info(f'Function metadata written to {output_path}')
 
 if __name__ == '__main__':
     main()
