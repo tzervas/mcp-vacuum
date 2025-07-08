@@ -69,13 +69,8 @@ def test_mcp_server_different_schemes(url):
 
 def test_field_validator_class_method_signatures():
     """Test that validators use correct @classmethod and cls parameter."""
-    auth_validator = getattr(AuthCredentials, 'parse_auth_method', None)
-    assert auth_validator is not None, "AuthCredentials.parse_auth_method not found"
-
-    server_validator = getattr(MCPServer, 'validate_endpoint', None)
-    assert server_validator is not None, "MCPServer.validate_endpoint not found"
-
-    # Assuming further checks on the validators if necessary
+    assert hasattr(AuthCredentials, 'parse_auth_method'), "AuthCredentials.parse_auth_method not found"
+    assert hasattr(MCPServer, 'validate_endpoint'), "MCPServer.validate_endpoint not found"
 
 def test_model_functionality():
     """Test overall model functionality with validators."""
