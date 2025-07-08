@@ -80,24 +80,57 @@ class AuthEventProcessor:
     async def _process_auth_events(self) -> None:
         """Main processing loop for authentication events.
         
-        Continuously processes events from the queue while running flag is True.
-        Each event is processed according to authentication event handling logic.
+        Processes events from the queue until stopped. Each event is handled
+        according to the authentication event handling logic.
         """
+        await self._start_processing()
+        await self._process_events_until_stopped()
+
+    async def _start_processing(self) -> None:
+        """Initialize the event processing state."""
         self.logger.info("Authentication event processor started.")
-        
-        while not self._stop_event.is_set():
+
+    async def _process_events_until_stopped(self) -> None:
+        """Process events in a loop until the stop event is set."""
+        while not await self._should_stop():
             try:
-                event = await self._get_next_event()
-                if event is None:  # Timeout occurred
-                    continue
-                    
-                await self._handle_event(event)
-                
+                await self._process_single_event()
             except asyncio.CancelledError:
-                self.logger.info("Authentication event processor cancelled.")
+                await self._handle_cancellation()
                 break
             except Exception as e:
-                self.logger.exception("Error in authentication event processor", error=str(e))
+                self._handle_processing_error(e)
+
+    async def _should_stop(self) -> bool:
+        """Check if processing should stop.
+
+        Returns:
+            bool: True if processing should stop, False otherwise.
+        """
+        return self._stop_event.is_set()
+
+    async def _process_single_event(self) -> None:
+        """Process a single event from the queue."""
+        event = await self._get_next_event()
+        if event is None:  # Timeout occurred
+            return
+
+        await self._handle_event(event)
+
+    async def _handle_cancellation(self) -> None:
+        """Handle cancellation of the event processor."""
+        self.logger.info("Authentication event processor cancelled.")
+
+    def _handle_processing_error(self, error: Exception) -> None:
+        """Handle any processing errors that occur.
+
+        Args:
+            error: The exception that occurred during processing.
+        """
+        self.logger.exception(
+            "Error in authentication event processor",
+            error=str(error)
+        )
     
     async def _get_next_event(self) -> Optional[Any]:
         """Get the next event from the queue with timeout.
