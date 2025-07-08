@@ -12,8 +12,8 @@ Pydantic models for MCP Vacuum project.
 #     ValidationResult,
 #     ValidationSeverity,
 # )
+from .common import AuthMethod, TransportType, ToolCategory, RiskLevel, MCPCapabilityType
 from .auth import (
-    AuthMethod,  # Re-exporting
     AuthorizationCodeResponse,
     ClientCredentials,
     OAuth2ClientConfig,

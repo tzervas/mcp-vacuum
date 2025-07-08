@@ -35,4 +35,7 @@ class MCPToolInvocationError(MCPClientError):
 
 class MCPAuthError(MCPClientError):
     """Raised for authentication specific errors during MCP communication."""
-    pass
+    def __init__(self, message: str, server_error: Any | None = None, requires_reauth: bool = False):
+        super().__init__(message)
+        self.server_error = server_error
+        self.requires_reauth = requires_reauth

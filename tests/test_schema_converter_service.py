@@ -1,7 +1,7 @@
 """
 Unit tests for SchemaConverterService.
 """
-from typing import Any
+from typing import Any, Dict, Optional
 
 import pytest  # type: ignore[import-not-found]
 
