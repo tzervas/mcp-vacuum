@@ -109,7 +109,7 @@ def get_interface_ips(interface: str) -> Set[str]:
                     addresses.add(addr['addr'].split('%')[0])
         return addresses
     except (ValueError, KeyError, OSError) as e:
-        logger.error("Failed to get addresses for interface %s: %s", interface, str(e))
+        logger.error("Failed to get addresses for interface", interface=interface, error=str(e))
         return set()
 
 def get_active_interfaces() -> List[str]:
