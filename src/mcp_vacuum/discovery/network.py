@@ -55,7 +55,7 @@ def get_linux_interfaces() -> List[str]:
                     interfaces.append(iface)
         return interfaces
     except subprocess.SubprocessError as e:
-        logger.error("Failed to get Linux interfaces: %s", str(e))
+        logger.error("Failed to get Linux interfaces", error=str(e))
         return []
 
 def get_network_interfaces(skip_loopback: bool = True) -> List[str]:
