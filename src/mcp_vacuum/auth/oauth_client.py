@@ -104,7 +104,7 @@ class OAuth2Client:
         self.logger.info("Authorization URL created", url_host=urlparse(auth_url).hostname)
         return auth_url, state, pkce.code_verifier
 
-def _prepare_token_request(self, token_request_data: TokenRequest) -> tuple[dict, dict, aiohttp.ClientTimeout]:
+    def _prepare_token_request(self, token_request_data: TokenRequest) -> tuple[dict, dict, aiohttp.ClientTimeout]:
         """
         Prepares the token request payload, headers and timeout settings.
 
@@ -195,7 +195,8 @@ def _prepare_token_request(self, token_request_data: TokenRequest) -> tuple[dict
             oauth_error = OAuthError.model_validate(error_data)
             
             # Special handling for invalid_grant during refresh
-            if oauth_error.error == "invalid_grant" and "refresh" in error_data.get("error_description", "").lower():
+            error_desc = error_data.get("error_description")
+            if oauth_error.error == "invalid_grant" and isinstance(error_desc, str) and "refresh" in error_desc.lower():
                 raise MCPAuthError(
                     f"Token refresh failed: {oauth_error.error} - {oauth_error.error_description or 'Refresh token likely invalid/revoked'}. Re-authentication required.",
                     server_error=oauth_error,
@@ -203,13 +204,13 @@ def _prepare_token_request(self, token_request_data: TokenRequest) -> tuple[dict
                 )
             
             raise MCPAuthError(
-                f"Token request failed: {oauth_error.error} - {oauth_error.error_description or 'No description'}",
+                f"Token request failed: {oauth_error.error} - {oauth_error.error_description if oauth_error.error_description else 'No description available'}",
                 server_error=oauth_error
             )
         except (json.JSONDecodeError, ValueError):
             raise MCPAuthError(f"Token request failed with status {status}. Response: {body[:500]}")
 
-def _parse_token_response(self, token_data: dict, existing_refresh_token: str | None = None) -> OAuth2Token:
+    def _parse_token_response(self, token_data: dict, existing_refresh_token: str | None = None) -> OAuth2Token:
         """
         Parses and validates the token response data.
 

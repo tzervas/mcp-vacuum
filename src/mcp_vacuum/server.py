@@ -90,11 +90,13 @@ class MCPServer(BaseModel):
     @field_validator("endpoint")
     @classmethod
     def validate_endpoint(cls, v):
-        """Validate endpoint URL format."""
+        """Validate endpoint URL format and scheme."""
         try:
             parsed = urlparse(v)
             if not parsed.scheme or not parsed.netloc:
                 raise ValueError("Invalid URL format")
+            if parsed.scheme.lower() not in ["http", "https"]:
+                raise ValueError("URL scheme must be either HTTP or HTTPS")
             return v
         except Exception as e:
             raise ValueError(f"Invalid endpoint URL: {e}")

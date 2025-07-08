@@ -238,14 +238,13 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
     async def stop_workflow_processing(self):
         self.logger.info("Stopping event processors...")
         self._stop_event.set()
-        for _ in self._processor_tasks:
-            # Stop all event processors
-            if self.discovery_processor:
-                await self.discovery_processor.stop()
-            if self.auth_processor:
-                await self.auth_processor.stop()
-            if self.conversion_processor:
-                await self.conversion_processor.stop()
+        # Stop all event processors
+        if self.discovery_processor:
+            await self.discovery_processor.stop()
+        if self.auth_processor:
+            await self.auth_processor.stop()
+        if self.conversion_processor:
+            await self.conversion_processor.stop()
         self.logger.info("Event processors stopped.")
 
     def get_summary(self) -> Dict[str, int]:

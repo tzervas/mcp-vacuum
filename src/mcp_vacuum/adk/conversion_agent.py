@@ -61,9 +61,14 @@ class ConversionAgent(MCPVacuumBaseAgent):
         # Queue to send SchemaConversionResultEvent to Orchestrator
         self.output_queue = output_queue
         
-        # Safe retrieval of fail_fast_conversion setting with bool type checking
+        # Safe retrieval and normalization of fail_fast_conversion setting
         fail_fast = getattr(app_config.agent_settings, "fail_fast_conversion", False)
-        self.fail_fast_conversion = isinstance(fail_fast, bool) and fail_fast
+        # Handle string values by converting to boolean
+        if isinstance(fail_fast, str):
+            self.fail_fast_conversion = fail_fast.lower() in ("true", "1", "yes", "on")
+        else:
+            # Handle boolean values directly or coerce other types to boolean
+            self.fail_fast_conversion = bool(fail_fast)
         
         self.logger.info("ConversionAgent initialized.", fail_fast_conversion=self.fail_fast_conversion)
         # self._conversion_tasks: Dict[str, asyncio.Task] = {} # server_id -> task, if managing ongoing conversions
