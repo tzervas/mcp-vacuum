@@ -4,10 +4,6 @@
         "dockerfile": "Dockerfile",
         "context": ".."
     },
-    "mounts": [
-        "source=${localEnv:HOME}/.cache/pip,target=/home/developer/.cache/pip,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.cache/uv,target=/home/developer/.cache/uv,type=bind,consistency=cached"
-    ],
     "customizations": {
         "vscode": {
             "extensions": [
@@ -15,7 +11,10 @@
                 "ms-python.vscode-pylance",
                 "ms-python.black-formatter",
                 "charliermarsh.ruff",
-                "matangover.mypy"
+                "matangover.mypy",
+                "ms-azuretools.vscode-docker",
+                "github.copilot",
+                "github.copilot-chat"
             ],
             "settings": {
                 "python.defaultInterpreterPath": "/usr/local/bin/python",
@@ -30,10 +29,16 @@
                 "[python]": {
                     "editor.formatOnSave": true,
                     "editor.defaultFormatter": "ms-python.black-formatter"
-                }
+                },
+                "files.eol": "\n",
+                "files.trimTrailingWhitespace": true
             }
         }
     },
-    "postCreateCommand": "uv pip install -e '.[dev]' && python -m pytest tests/",
-    "remoteUser": "developer"
+    "postCreateCommand": "/usr/local/bin/init-dev.sh",
+    "remoteUser": "developer",
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    }
 }

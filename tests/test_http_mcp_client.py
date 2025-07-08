@@ -1,19 +1,24 @@
 """
 Unit tests for HTTPMCPClient.
 """
-import pytest
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import aiohttp
+import aiohttp  # type: ignore[import-not-found]
+import pytest  # type: ignore[import-not-found]
 
 from mcp_vacuum.config import Config, MCPClientConfig
+from mcp_vacuum.mcp_client.exceptions import (
+    MCPAuthError,
+    MCPConnectionError,
+    MCPProtocolError,
+    MCPTimeoutError,
+)
 from mcp_vacuum.mcp_client.http_client import HTTPMCPClient
-from mcp_vacuum.mcp_client.exceptions import MCPConnectionError, MCPTimeoutError, MCPProtocolError, MCPAuthError
-from mcp_vacuum.models.mcp import MCPServiceRecord
 from mcp_vacuum.models.auth import OAuth2Token
 from mcp_vacuum.models.common import TransportType
+from mcp_vacuum.models.mcp import MCPServiceRecord
+
 
 @pytest.fixture
 def app_config():
@@ -58,7 +63,7 @@ async def http_client(app_config, service_record, mock_aiohttp_session_post):
     mock_session.post = mock_aiohttp_session_post # Use the more specific post mock
 
     # Patch TCPConnector to avoid real network/DNS lookups during session creation by client
-    with patch('aiohttp.TCPConnector', MagicMock()) as MockTCPConnector:
+    with patch('aiohttp.TCPConnector', MagicMock()):
         client = HTTPMCPClient(service_record, app_config, aiohttp_session=mock_session)
         # If client creates its own session, _get_session would be called.
         # If session is passed in, it's used directly.
@@ -127,7 +132,7 @@ async def test_http_client_send_request_raw_http_error_500(http_client, mock_aio
 @pytest.mark.asyncio
 async def test_http_client_send_request_raw_timeout(http_client, mock_aiohttp_session_post):
     """Test handling of asyncio.TimeoutError (simulating request timeout)."""
-    mock_aiohttp_session_post.side_effect = asyncio.TimeoutError("Request timed out")
+    mock_aiohttp_session_post.side_effect = TimeoutError("Request timed out")
 
     with pytest.raises(MCPTimeoutError, match="timed out"):
         await http_client._send_request_raw({"id": "5"})

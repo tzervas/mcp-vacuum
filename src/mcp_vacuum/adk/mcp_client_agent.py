@@ -1,23 +1,27 @@
 """
 MCPClientAgent: Manages communication with individual MCP servers.
 """
-import asyncio
-from typing import Optional, Any, Dict, List
+from typing import Any
 
-import structlog
-import aiohttp # For shared ClientSession
+import aiohttp  # type: ignore[import-not-found]
+import structlog  # type: ignore[import-not-found]
 
-from ..config import Config
 from ..adk.base import MCPVacuumBaseAgent
-from ..mcp_client import BaseMCPClient, HTTPMCPClient # Add other client types (WS, SSE, STDIO) as implemented
-from ..mcp_client.exceptions import MCPClientError, MCPAuthError
-from ..models.mcp import MCPServerInfo, MCPTool # MCPTool for return types
+from ..config import Config
+from ..mcp_client import (  # Add other client types (WS, SSE, STDIO) as implemented
+    BaseMCPClient,
+    HTTPMCPClient,
+)
+from ..mcp_client.exceptions import MCPAuthError, MCPClientError
 from ..models.auth import OAuth2Token
-from .auth_agent import AuthenticationAgent # To request tokens
+from ..models.mcp import MCPServerInfo, MCPTool  # MCPTool for return types
+from .auth_agent import AuthenticationAgent  # To request tokens
 
 # Event if this agent were to emit results asynchronously (e.g. ToolsListEvent)
 # class ToolsListEvent:
-#     def __init__(self, server_id: str, tools: List[MCPTool], error: Optional[str]=None):
+#     def __init__(
+#         self, server_id: str, tools: List[MCPTool], error: Optional[str] = None
+#     ):
 #         self.server_id = server_id
 #         self.tools = tools
 #         self.error = error
@@ -28,16 +32,28 @@ class MCPClientAgent(MCPVacuumBaseAgent):
     with specific MCP servers (e.g., listing tools, invoking tools).
     """
 
-    def __init__(self, app_config: Config, parent_logger: structlog.BoundLogger, auth_agent_ref: AuthenticationAgent):
-        super().__init__(agent_name="MCPClientAgent", app_config=app_config, parent_logger=parent_logger)
-        self.auth_agent = auth_agent_ref # Reference to AuthAgent to get tokens
+    def __init__(
+        self,
+        app_config: Config,
+        parent_logger: structlog.BoundLogger,
+        auth_agent_ref: AuthenticationAgent,
+    ):
+        super().__init__(
+            agent_name="MCPClientAgent",
+            app_config=app_config,
+            parent_logger=parent_logger,
+        )
+        # Reference to AuthAgent to get tokens
+        self.auth_agent = auth_agent_ref
 
-        # Shared aiohttp ClientSession for all HTTP-based MCP clients this agent manages.
-        # This session should be created with appropriate pooling from app_config.mcp_client.
-        self._shared_aiohttp_session: Optional[aiohttp.ClientSession] = None
+        # Shared aiohttp ClientSession for all HTTP-based MCP clients this
+        # agent manages. This session should be created with appropriate
+        # pooling from app_config.mcp_client.
+        self._shared_aiohttp_session: aiohttp.ClientSession | None = None
 
         # Cache for active MCP client instances to avoid re-creation
-        self._active_mcp_clients: Dict[str, BaseMCPClient] = {} # server_id -> client_instance
+        # server_id -> client_instance
+        self._active_mcp_clients: dict[str, BaseMCPClient] = {}
         self.logger.info("MCPClientAgent initialized.")
 
     async def _get_shared_aiohttp_session(self) -> aiohttp.ClientSession:
@@ -46,10 +62,11 @@ class MCPClientAgent(MCPVacuumBaseAgent):
             self.logger.info("Creating shared aiohttp session for MCPClientAgent.")
             client_cfg = self.app_config.mcp_client
             ssl_context = None
-            if client_cfg.ssl_verify: # General SSL verification setting
-                pass # Default aiohttp handling
-            else:
-                self.logger.warning("SSL verification is DISABLED for shared aiohttp session. This is insecure.")
+            if not client_cfg.ssl_verify:
+                self.logger.warning(
+                    "SSL verification is DISABLED for shared aiohttp session. "
+                    "This is insecure."
+                )
                 ssl_context = False
 
             connector = aiohttp.TCPConnector(
@@ -61,7 +78,7 @@ class MCPClientAgent(MCPVacuumBaseAgent):
             self._shared_aiohttp_session = aiohttp.ClientSession(connector=connector)
         return self._shared_aiohttp_session
 
-    async def _get_mcp_client(self, server_info: MCPServerInfo) -> Optional[BaseMCPClient]:
+    async def _get_mcp_client(self, server_info: MCPServerInfo) -> BaseMCPClient | None:
         """
         Gets or creates an MCP client instance for the given server.
         Handles token acquisition for the client.
@@ -70,29 +87,40 @@ class MCPClientAgent(MCPVacuumBaseAgent):
 
         if server_info.id in self._active_mcp_clients:
             client = self._active_mcp_clients[server_info.id]
-            if await client.is_connected() or server_info.transport_type == "http": # HTTP is often connectionless
-                 # For non-HTTP, if not connected, may need re-authentication or re-connect
-                pass # TODO: Add logic to re-auth/re-connect if needed for stateful transports
+            # HTTP is often connectionless
+            if await client.is_connected() or server_info.transport_type == "http":
+                # For non-HTTP, if not connected, may need re-authentication
+                # or re-connect.
+                # TODO: Add logic to re-auth/re-connect if needed for
+                # stateful transports
+                pass
             log.debug("Reusing active MCP client instance.")
         else:
             log.debug("Creating new MCP client instance.")
             # Determine transport and instantiate appropriate client
             # For P0, primarily supporting HTTP
-            if server_info.transport_type == "http": # Assuming MCPServerInfo has transport_type
+            # Assuming MCPServerInfo has transport_type
+            if server_info.transport_type == "http":
                 shared_session = await self._get_shared_aiohttp_session()
                 client = HTTPMCPClient(
-                    service_record=server_info, # HTTPMCPClient expects MCPServiceRecord, ensure types match
+                    # HTTPMCPClient expects MCPServiceRecord, ensure types match
+                    service_record=server_info,
                     config=self.app_config,
-                    aiohttp_session=shared_session
+                    aiohttp_session=shared_session,
                 )
             # elif server_info.transport_type == "websocket":
             #     client = WebSocketMCPClient(...)
             else:
-                log.error("Unsupported transport type for MCP client", transport=server_info.transport_type)
+                log.error(
+                    "Unsupported transport type for MCP client",
+                    transport=server_info.transport_type,
+                )
                 return None
 
             try:
-                await client.connect() # Establish connection (for stateful transports, or session prep for HTTP)
+                # Establish connection (for stateful transports, or session prep
+                # for HTTP)
+                await client.connect()
                 self._active_mcp_clients[server_info.id] = client
             except MCPClientError as e:
                 log.error("Failed to connect MCP client", error=str(e))
@@ -101,27 +129,36 @@ class MCPClientAgent(MCPVacuumBaseAgent):
 
         # Acquire and set token for this client instance before returning
         log.debug("Requesting token for MCP client from AuthenticationAgent.")
-        # MCPServiceRecord (used by HTTP client) and MCPServerInfo (used by AuthAgent) are compatible enough here.
-        token: Optional[OAuth2Token] = await self.auth_agent.get_token_for_server_command(server_info.id, server_info)
+        # MCPServiceRecord (used by HTTP client) and MCPServerInfo (used by
+        # AuthAgent) are compatible enough here.
+        token: OAuth2Token | None = (
+            await self.auth_agent.get_token_for_server_command(
+                server_info.id, server_info
+            )
+        )
 
         if not token:
-            log.warning("No token available from AuthenticationAgent on first attempt. Retrying token acquisition...")
+            log.warning(
+                "No token available from AuthenticationAgent on first attempt. "
+                "Retrying token acquisition..."
+            )
             # Retry once in case of expiry/invalidation
             # Ensure get_token_for_server_command supports force_refresh or similar.
-            # This assumes AuthenticationAgent.get_token_for_server_command can take force_refresh.
-            # If not, this part needs adjustment or the capability added to AuthAgent.
-            if hasattr(self.auth_agent, "get_token_for_server_command"): # Basic check
-                 token = await self.auth_agent.get_token_for_server_command(server_info.id, server_info, force_refresh=True)
-            else: # Fallback if force_refresh is not directly supported in this way
-                 log.warning("AuthAgent does not seem to support explicit force_refresh. Simple retry may not be effective for expired tokens.")
-                 # Consider if a different call to auth_agent is needed, e.g., one that always refreshes.
+            # Retry with force_refresh to ensure we get a fresh token
+            token = await self.auth_agent.get_token_for_server_command(
+                server_info.id, server_info, force_refresh=True
+            )
 
         if not token:
-            log.warning("No token available from AuthenticationAgent after retry. MCP client calls may fail.")
-            # Depending on server auth requirements, this might be acceptable (e.g. public tools)
-            # or it might mean all subsequent calls will fail.
-            await client.set_auth_token(None) # Explicitly clear any old token
-            # Optionally, we could raise an error here if token is strictly required.
+            log.warning(
+                "No token available from AuthenticationAgent after retry. "
+                "MCP client calls may fail."
+            )
+            # Depending on server auth requirements, this might be acceptable
+            # (e.g. public tools) or it might mean all subsequent calls will fail.
+            await client.set_auth_token(None)  # Explicitly clear any old token
+            # Optionally, we could raise an error here if token is strictly
+            # required.
             # raise MCPAuthError(f"Failed to get token for server {server_info.id}")
         else:
             log.debug("Token obtained, setting on MCP client.")
@@ -129,7 +166,7 @@ class MCPClientAgent(MCPVacuumBaseAgent):
 
         return client
 
-    async def get_tools_for_server(self, server_info: MCPServerInfo) -> Optional[List[MCPTool]]:
+    async def get_tools_for_server(self, server_info: MCPServerInfo) -> list[MCPTool] | None:
         """
         Retrieves the list of tools from the specified MCP server.
         """
@@ -145,22 +182,33 @@ class MCPClientAgent(MCPVacuumBaseAgent):
             # BaseMCPClient.list_tools() returns List[Dict[str, Any]]
             # We need to parse these into MCPTool Pydantic models.
             raw_tools_data = await client.list_tools()
-            tools = [MCPTool.model_validate(tool_data) for tool_data in raw_tools_data]
+            tools = [
+                MCPTool.model_validate(tool_data) for tool_data in raw_tools_data
+            ]
             log.info("Successfully listed tools.", num_tools=len(tools))
             return tools
-        except MCPAuthError as e: # Token might have expired between _get_mcp_client and actual call
-            log.warning("Authentication error while listing tools. Token might be stale.", error=str(e))
-            # Optionally, try to refresh token and retry once here, or rely on next call to re-auth.
+        # Token might have expired between _get_mcp_client and actual call
+        except MCPAuthError as e:
+            log.warning(
+                "Authentication error while listing tools. Token might be stale.",
+                error=str(e),
+            )
+            # Optionally, try to refresh token and retry once here, or rely on
+            # next call to re-auth.
             # For now, just let it fail to Orchestrator or caller.
             return None
         except MCPClientError as e:
             log.error("MCPClientError while listing tools.", error=str(e))
             return None
         except Exception as e:
-            log.exception("Unexpected error listing tools.", error_type=type(e).__name__)
+            log.exception(
+                "Unexpected error listing tools.", error_type=type(e).__name__
+            )
             return None
 
-    async def get_tool_schema_for_server(self, server_info: MCPServerInfo, tool_name: str) -> Optional[MCPTool]:
+    async def get_tool_schema_for_server(
+        self, server_info: MCPServerInfo, tool_name: str
+    ) -> MCPTool | None:
         """Retrieves the schema for a specific tool from an MCP server."""
         log = self.logger.bind(server_id=server_info.id, tool_name=tool_name)
         log.info("Attempting to get tool schema.")
@@ -182,10 +230,17 @@ class MCPClientAgent(MCPVacuumBaseAgent):
             log.error("MCPClientError while getting tool schema.", error=str(e))
             return None
         except Exception as e:
-            log.exception("Unexpected error getting tool schema.", error_type=type(e).__name__)
+            log.exception(
+                "Unexpected error getting tool schema.", error_type=type(e).__name__
+            )
             return None
 
-    async def invoke_tool_on_server(self, server_info: MCPServerInfo, tool_name: str, parameters: Dict[str, Any]) -> Optional[Any]:
+    async def invoke_tool_on_server(
+        self,
+        server_info: MCPServerInfo,
+        tool_name: str,
+        parameters: dict[str, Any],
+    ) -> Any | None:
         """Invokes a tool on a specific MCP server."""
         log = self.logger.bind(server_id=server_info.id, tool_name=tool_name)
         log.info("Attempting to invoke tool.")
@@ -209,23 +264,35 @@ class MCPClientAgent(MCPVacuumBaseAgent):
             log.error("MCPClientError while invoking tool.", error=str(e))
             return None
         except Exception as e:
-            log.exception("Unexpected error invoking tool.", error_type=type(e).__name__)
+            log.exception(
+                "Unexpected error invoking tool.", error_type=type(e).__name__
+            )
             return None
 
-    async def start(self) -> None: # ADK lifecycle
+    async def start(self) -> None:  # ADK lifecycle
         await super().start()
-        await self._get_shared_aiohttp_session() # Initialize shared session on start
-        self.logger.info("MCPClientAgent started (ADK lifecycle). Shared HTTP session prepared.")
+        # Initialize shared session on start
+        await self._get_shared_aiohttp_session()
+        self.logger.info(
+            "MCPClientAgent started (ADK lifecycle). Shared HTTP session prepared."
+        )
 
-    async def stop(self) -> None: # ADK lifecycle
+    async def stop(self) -> None:  # ADK lifecycle
         self.logger.info("MCPClientAgent stopping (ADK lifecycle)...")
         # Close all active MCP client connections
-        for server_id, client_instance in list(self._active_mcp_clients.items()):
+        for server_id, client_instance in list(
+            self._active_mcp_clients.items()
+        ):
             try:
-                self.logger.debug(f"Disconnecting client for server {server_id}")
+                self.logger.debug(
+                    f"Disconnecting client for server {server_id}"
+                )
                 await client_instance.disconnect()
             except Exception as e:
-                self.logger.error(f"Error disconnecting client for server {server_id}", error=str(e))
+                self.logger.error(
+                    f"Error disconnecting client for server {server_id}",
+                    error=str(e),
+                )
         self._active_mcp_clients.clear()
 
         # Close the shared aiohttp session
@@ -238,10 +305,15 @@ class MCPClientAgent(MCPVacuumBaseAgent):
         self.logger.info("MCPClientAgent stopped (ADK lifecycle).")
 
 
-# Ensure MCPServerInfo (passed around) is compatible with MCPServiceRecord (used by HTTPMCPClient).
-# They should ideally be the same model or MCPServerInfo should contain an MCPServiceRecord.
-# For now, assuming MCPServerInfo has .id, .name, .transport_type, .endpoint, .auth_metadata.
-# The Pydantic parsing (model_validate) for MCPTool in list_tools/get_tool_schema is important.
-# Error handling for token expiry during a call (after _get_mcp_client got a token) is noted.
-# A retry mechanism within these methods (e.g., one retry after token refresh) could be added.
+# Ensure MCPServerInfo (passed around) is compatible with MCPServiceRecord
+# (used by HTTPMCPClient). They should ideally be the same model or
+# MCPServerInfo should contain an MCPServiceRecord.
+# For now, assuming MCPServerInfo has .id, .name, .transport_type, .endpoint,
+# .auth_metadata.
+# The Pydantic parsing (model_validate) for MCPTool in list_tools/get_tool_schema
+# is important.
+# Error handling for token expiry during a call (after _get_mcp_client got a
+# token) is noted.
+# A retry mechanism within these methods (e.g., one retry after token refresh)
+# could be added.
 # For P0, this agent provides the core functionalities.

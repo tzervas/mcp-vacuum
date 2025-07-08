@@ -1,15 +1,19 @@
 """
 Unit tests for PKCE generation utilities.
 """
-import pytest
-import re
-import hashlib
 import base64
+import hashlib
+import re
+import secrets
+import string
+
+import pytest
 
 from mcp_vacuum.auth.pkce import generate_pkce_challenge_pair
 from mcp_vacuum.models.auth import PKCEChallenge
 
-def test_generate_pkce_s256():
+
+def test_generate_pkce_s256() -> None:
     """Test S256 PKCE challenge generation."""
     pkce_pair = generate_pkce_challenge_pair(code_challenge_method="S256")
 
@@ -32,7 +36,7 @@ def test_generate_pkce_s256():
     assert pkce_pair.code_challenge == expected_challenge
     assert len(pkce_pair.code_challenge) == 43 # Base64URL of SHA256 hash is always 43 chars
 
-def test_generate_pkce_plain():
+def test_generate_pkce_plain() -> None:
     """Test 'plain' PKCE challenge generation."""
     pkce_pair = generate_pkce_challenge_pair(code_challenge_method="plain")
 
@@ -46,30 +50,29 @@ def test_generate_pkce_plain():
     # For "plain", challenge is the same as verifier
     assert pkce_pair.code_challenge == pkce_pair.code_verifier
 
-def test_generate_pkce_unsupported_method():
+def test_generate_pkce_unsupported_method() -> None:
     """Test error handling for unsupported challenge methods."""
     with pytest.raises(ValueError) as excinfo:
         generate_pkce_challenge_pair(code_challenge_method="MD5")
     assert "Unsupported code_challenge_method: MD5" in str(excinfo.value)
 
-def test_pkce_verifier_default_generation():
+def test_pkce_verifier_default_generation() -> None:
     """Test that the default generate_pkce_challenge_pair function generates a verifier of max allowed length."""
-    for _ in range(10):  # Repeat a few times for randomness
-        pkce_pair = generate_pkce_challenge_pair()  # Defaults to S256
-        # The model PKCEChallenge validates 43 <= len <= 128.
-        # The current implementation of generate_pkce_challenge_pair aims for max length (128).
-        assert len(pkce_pair.code_verifier) == 128
+    # The loop was removed as generate_pkce_challenge_pair is deterministic
+    # in its length generation (always 128 characters).
+    # Testing a single generation is sufficient.
+    pkce_pair = generate_pkce_challenge_pair()  # Defaults to S256
+    # The model PKCEChallenge validates 43 <= len <= 128.
+    # The current implementation of generate_pkce_challenge_pair aims for max length (128).
+    assert len(pkce_pair.code_verifier) == 128
 
-        pkce_pair_plain = generate_pkce_challenge_pair(code_challenge_method="plain")
-        assert len(pkce_pair_plain.code_verifier) == 128
+    pkce_pair_plain = generate_pkce_challenge_pair(code_challenge_method="plain")
+    assert len(pkce_pair_plain.code_verifier) == 128
 
 
-@pytest.mark.parametrize("verifier_length", [43, 64, 128]) # Test min, mid, and max
-def test_pkce_model_accepts_various_verifier_lengths(verifier_length):
+@pytest.mark.parametrize("verifier_length", [43, 64, 128])  # Test min, mid, and max
+def test_pkce_model_accepts_various_verifier_lengths(verifier_length: int) -> None:
     """Test that the PKCEChallenge model accepts verifiers of various allowed lengths."""
-    import secrets
-    import string
-
     # Generate a verifier of the specified length using allowed characters
     # RFC 7636: code-verifier = high-entropy cryptographic random STRING using the unreserved characters
     # [A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~"
@@ -90,7 +93,7 @@ def test_pkce_model_accepts_various_verifier_lengths(verifier_length):
     assert pkce_plain.code_challenge == code_verifier
 
 
-def test_pkce_model_rejects_invalid_verifier_lengths():
+def test_pkce_model_rejects_invalid_verifier_lengths() -> None:
     """Test that the PKCEChallenge model rejects verifiers of invalid lengths."""
     # Too short
     with pytest.raises(ValueError): # Pydantic validation error
@@ -100,7 +103,7 @@ def test_pkce_model_rejects_invalid_verifier_lengths():
         PKCEChallenge(code_verifier="A"*129, code_challenge_method="S256")
 
 
-def test_pkce_minimum_length_verifier_challenge_computation():
+def test_pkce_minimum_length_verifier_challenge_computation() -> None:
     """Test that a 43-character code_verifier is accepted and challenge is computed correctly by the model."""
     min_length_verifier = "A" * 43 # Example min length verifier
 

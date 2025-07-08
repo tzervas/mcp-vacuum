@@ -71,18 +71,33 @@ class OAuth2Client:
 
     def create_authorization_url(self, state: str, pkce: PKCEChallenge, extra_params: Optional[Dict[str, str]] = None) -> Tuple[str, str, str]:
         """
-        Creates the authorization URL to redirect the user to.
+        Creates the authorization URL to redirect the user to for starting the OAuth 2.1 PKCE flow.
+
+        This method builds the authorization URL with required OAuth2 parameters and PKCE challenge. The URL will direct
+        the user to the authorization server's consent page where they can authorize the client.
+
+        For improved security, this method:
+        - Uses state parameter for CSRF protection
+        - Includes PKCE challenge for public client security
+        - Ensures all required parameters are property encoded
 
         Args:
-            state: An opaque value used to maintain state between the request and callback.
-            pkce: The PKCEChallenge object containing verifier, challenge, and method.
-            extra_params: Additional query parameters to include in the authorization request.
+            state: An opaque value used to maintain state between the request and callback. This provides
+                  CSRF protection by validating that the response comes from the same request.
+            pkce: The PKCEChallenge object containing verifier, challenge, and method. This enables
+                 PKCE (RFC 7636) extension for enhanced public client security.
+            extra_params: Optional dictionary of additional query parameters to include in the
+                        authorization request. These parameters will be added to the standard OAuth2 parameters.
 
         Returns:
             A tuple containing:
-            - The full authorization URL.
-            - The state parameter used.
-            - The PKCE code verifier.
+            - The full authorization URL with all required parameters properly encoded.
+            - The state parameter used (needed to verify the callback).
+            - The PKCE code verifier (needed for token exchange).
+
+        Raises:
+            ValueError: If required configuration (endpoints, client_id, etc.) is missing.
+            URLError: If the authorization endpoint URL is malformed.
         """
         self.logger.debug("Creating authorization URL.")
         params = {
@@ -104,47 +119,25 @@ class OAuth2Client:
         self.logger.info("Authorization URL created", url_host=urlparse(auth_url).hostname)
         return auth_url, state, pkce.code_verifier
 
-    async def exchange_code_for_token(self, code: str, code_verifier: str, state: Optional[str] = None, expected_state: Optional[str] = None) -> OAuth2Token:
+    def _prepare_token_request(self, token_request_data: TokenRequest) -> tuple[dict, dict, aiohttp.ClientTimeout]:
         """
-        Exchanges an authorization code for an access token and refresh token.
+        Prepares the token request payload, headers and timeout settings.
 
         Args:
-            code: The authorization code received from the authorization server.
-            code_verifier: The PKCE code verifier.
-            state: The state parameter received from the authorization server (optional).
-            expected_state: The state parameter initially sent to the server (optional, for validation).
+            token_request_data: The token request data object.
 
         Returns:
-            An OAuth2Token object containing the token information.
-
-        Raises:
-            MCPAuthError: If the state is invalid or token exchange fails.
-            MCPConnectionError: If there's a problem communicating with the token endpoint.
+            A tuple containing:
+                - payload (dict): The request payload.
+                - headers (dict): The request headers.
+                - timeout (aiohttp.ClientTimeout): The request timeout settings.
         """
-        self.logger.debug("Exchanging authorization code for token.")
-        if expected_state and state != expected_state:
-            self.logger.error("OAuth state mismatch", received_state=state, expected_state=expected_state)
-            raise MCPAuthError(f"Invalid OAuth state: received '{state}', expected '{expected_state}'. Possible CSRF attack.")
-
-        session = await self._get_session()
-
-        token_request_data = TokenRequest(
-            grant_type="authorization_code",
-            code=code,
-            redirect_uri=self.client_config.redirect_uri, # Must match the one used in auth request
-            client_id=self.client_config.client_id, # Required for public clients
-            code_verifier=code_verifier
-        )
-        # Pydantic's model_dump(exclude_none=True) is useful here
+        # Pydantic's model_dump with exclude_none=True for clean payload
         payload = token_request_data.model_dump(exclude_none=True, by_alias=True)
 
         headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
-        # Basic Auth for confidential clients, not typically used with PKCE public clients.
-        # if self.client_config.client_secret:
-        #     auth = aiohttp.BasicAuth(self.client_config.client_id, self.client_config.client_secret)
-        # else:
-        #     auth = None
-        auth = None # Assuming public client for PKCE
+        # Basic Auth for confidential clients, not typically used with PKCE public clients
+        auth = None  # Assuming public client for PKCE
 
         timeout_settings = self.app_config.mcp_client
         request_timeout = aiohttp.ClientTimeout(
@@ -152,39 +145,46 @@ class OAuth2Client:
             connect=timeout_settings.connect_timeout_seconds
         )
 
+        return payload, headers, request_timeout
+
+    async def _send_token_request(self, payload: dict, headers: dict, timeout: aiohttp.ClientTimeout) -> dict:
+        """
+        Sends a token request to the authorization server.
+
+        Args:
+            payload: The request payload.
+            headers: The request headers.
+            timeout: The request timeout settings.
+
+        Returns:
+            The parsed JSON response from the server.
+
+        Raises:
+            MCPAuthError: If the server returns an error response.
+            MCPConnectionError: If there's a network or connection error.
+        """
+        session = await self._get_session()
         self.logger.info("Requesting token from endpoint", token_url_host=urlparse(str(self.client_config.token_endpoint)).hostname)
+
         try:
-            async with session.post(
+            with await session.post(
                 str(self.client_config.token_endpoint),
                 data=payload,
                 headers=headers,
-                auth=auth, # None for public clients
-                timeout=request_timeout
+                auth=None,  # Public client
+                timeout=timeout
             ) as response:
                 response_text = await response.text()
                 self.logger.debug("Token endpoint response status", status=response.status)
 
                 if response.status != 200:
-                    self.logger.error("Token exchange failed", status=response.status, response_body=response_text[:500])
-                    try:
-                        # Try to parse error response as JSON (RFC 6749, Section 5.2)
-                        error_data = json.loads(response_text)
-                        oauth_error = OAuthError.model_validate(error_data)
-                        raise MCPAuthError(f"Token exchange failed: {oauth_error.error} - {oauth_error.error_description or 'No description'}", server_error=oauth_error)
-                    except (json.JSONDecodeError, ValueError): # ValueError from Pydantic validation
-                        raise MCPAuthError(f"Token exchange failed with status {response.status}. Response: {response_text[:500]}")
+                    await self._handle_error_response(response.status, response_text)
 
                 try:
-                    token_data = json.loads(response_text)
-                    token = OAuth2Token.model_validate(token_data)
-                    self.logger.info("Token successfully obtained.")
-                    return token
+                    return json.loads(response_text)
                 except json.JSONDecodeError as e:
                     self.logger.error("Failed to decode JSON from token response", error=str(e), response_text=response_text[:500])
                     raise MCPAuthError(f"Failed to decode JSON from token response: {e}") from e
-                except ValueError as e: # Pydantic validation error
-                    self.logger.error("Failed to validate token response against OAuth2Token model", error=str(e), raw_data=token_data)
-                    raise MCPAuthError(f"Invalid token data received: {e}") from e
 
         except aiohttp.ClientConnectorError as e:
             self.logger.error("Token endpoint connection failed", error=str(e.os_error or e))
@@ -195,6 +195,113 @@ class OAuth2Client:
         except aiohttp.ClientError as e:
             self.logger.error("AIOHTTP client error during token exchange", error_type=type(e).__name__, error_message=str(e))
             raise MCPConnectionError(f"HTTP client error during token exchange: {e}") from e
+
+    async def _handle_error_response(self, status: int, body: str) -> None:
+        """
+        Handles error responses from the token endpoint.
+
+        Args:
+            status: The HTTP status code.
+            body: The response body.
+
+        Raises:
+            MCPAuthError: Always raised with appropriate error details.
+        """
+        try:
+            error_data = json.loads(body)
+            oauth_error = OAuthError.model_validate(error_data)
+            
+            # Add safe error_description handling
+            error_desc = error_data.get("error_description")
+            if isinstance(error_desc, str) and "refresh" in error_desc.lower():
+                # Handle refresh token error
+                raise MCPAuthError(
+                    f"Token refresh failed: {oauth_error.error} - {error_desc or 'Refresh token likely invalid/revoked'}. Re-authentication required.",
+                    server_error=oauth_error,
+                    requires_reauth=True
+                )
+            
+            # Add structured logging for error cases
+            self.logger.error("Token request failed",
+                status=status,
+                error=oauth_error.error,
+                description=oauth_error.error_description
+            )
+            
+            raise MCPAuthError(
+                f"Token request failed: {oauth_error.error} - {oauth_error.error_description if oauth_error.error_description else 'No description available'}",
+                server_error=oauth_error
+            )
+        except (json.JSONDecodeError, ValueError):
+            raise MCPAuthError(f"Token request failed with status {status}. Response: {body[:500]}")
+
+    def _parse_token_response(self, token_data: dict, existing_refresh_token: Optional[str] = None) -> OAuth2Token:
+        """
+        Parses and validates the token response data.
+
+        Args:
+            token_data: The raw token response data from the OAuth server.
+            existing_refresh_token: The current refresh token to preserve if a new one isn't provided.
+
+        Returns:
+            OAuth2Token: A validated token instance containing access token and optionally refresh token.
+
+        Raises:
+            MCPAuthError: If the token data is invalid or malformed.
+        """
+        try:
+            token = OAuth2Token.model_validate(token_data)
+            
+            # Preserve existing refresh token if new one not provided
+            if not token.refresh_token and existing_refresh_token:
+                self.logger.debug("Refresh token not returned in response, reusing existing one.")
+                token.refresh_token = existing_refresh_token
+                
+            self.logger.info("Token successfully processed.")
+            return token
+        except ValueError as e:
+            self.logger.error("Failed to validate token response", error=str(e), raw_data=token_data)
+            raise MCPAuthError(f"Invalid token data received: {e}") from e
+
+    async def exchange_code_for_token(
+        self,
+        code: str,
+        code_verifier: str,
+        state: Optional[str] = None,
+        expected_state: Optional[str] = None,
+    ) -> OAuth2Token:
+        """
+        Exchanges an authorization code for an access token and refresh token using PKCE flow.
+
+        Args:
+            code: The authorization code received from the authorization server.
+            code_verifier: The PKCE code verifier that matches the challenge sent in the auth request.
+            state: The state parameter received from the authorization server.
+            expected_state: The state parameter initially sent to the server (for CSRF validation).
+
+        Returns:
+            OAuth2Token: An object containing the access token, expiry, and optional refresh token.
+
+        Raises:
+            MCPAuthError: If the state is invalid or token exchange fails.
+            MCPConnectionError: If there's a problem communicating with the token endpoint.
+        """
+        self.logger.debug("Exchanging authorization code for token.")
+        if expected_state and state != expected_state:
+            self.logger.error("OAuth state mismatch", received_state=state, expected_state=expected_state)
+            raise MCPAuthError(f"Invalid OAuth state: received '{state}', expected '{expected_state}'. Possible CSRF attack.")
+
+        token_request_data = TokenRequest(
+            grant_type="authorization_code",
+            code=code,
+            redirect_uri=self.client_config.redirect_uri,  # Must match the one used in auth request
+            client_id=self.client_config.client_id,  # Required for public clients
+            code_verifier=code_verifier
+        )
+
+        payload, headers, timeout = self._prepare_token_request(token_request_data)
+        token_data = await self._send_token_request(payload, headers, timeout)
+        return self._parse_token_response(token_data)
 
     async def refresh_token(self, refresh_token_value: str) -> OAuth2Token:
         """
@@ -215,76 +322,16 @@ class OAuth2Client:
             self.logger.error("Refresh token is missing.")
             raise MCPAuthError("Cannot refresh token: refresh_token is missing.")
 
-        session = await self._get_session()
-
         token_request_data = TokenRequest(
             grant_type="refresh_token",
             refresh_token=refresh_token_value,
-            client_id=self.client_config.client_id, # May be required by some servers even for refresh
+            client_id=self.client_config.client_id,  # May be required by some servers even for refresh
             # scope: Optional, some servers allow requesting same or narrower scope
         )
-        payload = token_request_data.model_dump(exclude_none=True, by_alias=True)
 
-        headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
-        auth = None # Assuming public client
-
-        timeout_settings = self.app_config.mcp_client
-        request_timeout = aiohttp.ClientTimeout(
-            total=timeout_settings.request_timeout_seconds,
-            connect=timeout_settings.connect_timeout_seconds
-        )
-
-        self.logger.info("Requesting token refresh from endpoint", token_url_host=urlparse(str(self.client_config.token_endpoint)).hostname)
-        try:
-            async with session.post(
-                str(self.client_config.token_endpoint),
-                data=payload,
-                headers=headers,
-                auth=auth,
-                timeout=request_timeout
-            ) as response:
-                response_text = await response.text()
-                self.logger.debug("Token refresh response status", status=response.status)
-
-                if response.status != 200:
-                    self.logger.error("Token refresh failed", status=response.status, response_body=response_text[:500])
-                    try:
-                        error_data = json.loads(response_text)
-                        oauth_error = OAuthError.model_validate(error_data)
-                        # If refresh token is revoked/invalid, server might return 'invalid_grant'
-                        if oauth_error.error == "invalid_grant":
-                             raise MCPAuthError(f"Token refresh failed: {oauth_error.error} - {oauth_error.error_description or 'Refresh token likely invalid/revoked'}. Re-authentication required.", server_error=oauth_error, requires_reauth=True)
-                        raise MCPAuthError(f"Token refresh failed: {oauth_error.error} - {oauth_error.error_description or 'No description'}", server_error=oauth_error)
-                    except (json.JSONDecodeError, ValueError) as e:
-                         raise MCPAuthError(f"Token refresh failed with status {response.status}. Response: {response_text[:500]}")
-
-                try:
-                    token_data = json.loads(response_text)
-                    # Important: A refresh token response might not include a new refresh_token.
-                    # If it doesn't, the old refresh_token should typically continue to be used.
-                    # Some servers might issue a new refresh_token (rotating refresh tokens).
-                    new_token = OAuth2Token.model_validate(token_data)
-                    if not new_token.refresh_token:
-                        self.logger.debug("Refresh token not returned in refresh response, reusing existing one.")
-                        new_token.refresh_token = refresh_token_value # Preserve the old one if not updated
-                    self.logger.info("Token successfully refreshed.")
-                    return new_token
-                except json.JSONDecodeError as e:
-                    self.logger.error("Failed to decode JSON from token refresh response", error=str(e), response_text=response_text[:500])
-                    raise MCPAuthError(f"Failed to decode JSON from token refresh response: {e}") from e
-                except ValueError as e: # Pydantic validation error
-                    self.logger.error("Failed to validate token refresh response", error=str(e), raw_data=token_data)
-                    raise MCPAuthError(f"Invalid token data received on refresh: {e}") from e
-
-        except aiohttp.ClientConnectorError as e:
-            self.logger.error("Token refresh endpoint connection failed", error=str(e.os_error or e))
-            raise MCPConnectionError(f"Connection to token endpoint {self.client_config.token_endpoint} for refresh failed: {e.os_error or str(e)}") from e
-        except asyncio.TimeoutError as e:
-            self.logger.error("Token refresh request timed out", token_url=str(self.client_config.token_endpoint))
-            raise MCPConnectionError(f"Request to token endpoint {self.client_config.token_endpoint} for refresh timed out.") from e
-        except aiohttp.ClientError as e:
-            self.logger.error("AIOHTTP client error during token refresh", error_type=type(e).__name__, error_message=str(e))
-            raise MCPConnectionError(f"HTTP client error during token refresh: {e}") from e
+        payload, headers, timeout = self._prepare_token_request(token_request_data)
+        token_data = await self._send_token_request(payload, headers, timeout)
+        return self._parse_token_response(token_data, refresh_token_value)
 
     async def __aenter__(self):
         await self._get_session() # Ensure session is ready

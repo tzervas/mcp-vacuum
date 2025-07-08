@@ -1,13 +1,18 @@
 """
 Unit tests for TokenStorage implementations.
 """
-import pytest
-from unittest.mock import patch, MagicMock
-import json
+from unittest.mock import MagicMock, patch
 
+import pytest  # type: ignore[import-not-found]
+
+from mcp_vacuum.auth.token_storage import (
+    KeyringTokenStorage,
+    TokenStorageError,
+    get_token_storage,
+)
 from mcp_vacuum.config import AuthConfig
-from mcp_vacuum.auth.token_storage import KeyringTokenStorage, TokenStorageError, TokenNotFoundError, get_token_storage
-from mcp_vacuum.models.auth import OAuth2Token, ClientCredentials
+from mcp_vacuum.models.auth import ClientCredentials, OAuth2Token
+
 
 @pytest.fixture
 def auth_config_keyring():

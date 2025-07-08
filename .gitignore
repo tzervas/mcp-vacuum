@@ -70,5 +70,23 @@ docker-compose.override.yml
 secrets/
 .env.local
 
+# Development and tooling
+.project-trackers/
+mypy.ini
+pytest.ini
+*.ps1
+*.sh
+!.github/workflows/*.sh
+
+# Documentation
+docs/Kagent_MCP_ADK_Documentation.md
+
+# Internal repositories
+mcp-vacuum-internal/
+
+# Local configurations
+config.py
+src/mcp_vacuum/utils/git.py
+
 # ignore internal docs
 # docs/*.pdf

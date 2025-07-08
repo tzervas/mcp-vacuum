@@ -16,4 +16,4 @@ __all__ = [
     # "generate_pkce_challenge",
     # "SecureTokenStorage",
     # "TokenManager",
-]
+]  # type: list[str]
