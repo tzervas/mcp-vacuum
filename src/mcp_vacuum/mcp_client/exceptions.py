@@ -18,7 +18,7 @@ class MCPTimeoutError(MCPConnectionError):
 class MCPProtocolError(MCPClientError):
     """Raised for errors related to the JSONRPC protocol itself
     (e.g., malformed responses, unexpected message format)."""
-    def __init__(self, message: str, error_code: Optional[int] = None, error_data: Optional[Dict] = None):
+    def __init__(self, message: str, error_code: Optional[int] = None, error_data: Optional[Dict[str, Any]] = None):
         super().__init__(message)
         self.error_code = error_code
         self.error_data = error_data
@@ -26,7 +26,7 @@ class MCPProtocolError(MCPClientError):
 class MCPToolInvocationError(MCPClientError):
     """Raised when invoking a tool on the MCP server results in an error
     reported by the server's JSONRPC error response for that tool call."""
-    def __init__(self, tool_name: str, message: str, error_code: Optional[int] = None, error_data: Optional[Dict] = None):
+    def __init__(self, tool_name: str, message: str, error_code: Optional[int] = None, error_data: Optional[Dict[str, Any]] = None):
         full_message = f"Error invoking tool '{tool_name}': {message}"
         super().__init__(full_message)
         self.tool_name = tool_name
