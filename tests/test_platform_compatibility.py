@@ -3,15 +3,14 @@ import platform
 import asyncio
 import docker
 import keyring
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import logging
 
 logger = logging.getLogger(__name__)
 
 @pytest.fixture
 async def mock_docker_client():
-    async with MagicMock(spec=docker.DockerClient) as mock_client:
-        yield mock_client
+    return AsyncMock(spec=docker.DockerClient)
 
 @pytest.fixture
 def mock_keyring():
