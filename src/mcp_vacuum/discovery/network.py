@@ -127,8 +127,7 @@ def get_active_interfaces() -> List[str]:
     Returns:
         List[str]: List of active interface names.
     """
-    active = [iface for iface in get_network_interfaces() if get_interface_ips(iface)]
-    return active
+    return [iface for iface in get_network_interfaces() if get_interface_ips(iface)]
 
 
 class NetworkDiscovery:
@@ -149,7 +148,10 @@ class NetworkDiscovery:
         for iface in interfaces:
             ips = get_interface_ips(iface)
             for ip in ips:
-                # Create a service record for each discovered IP
+                # Create a service record for each discovered IP.
+                # Note: MCPServiceRecord is immutable, so we create a new one each time
+                # with all required fields set at initialization.
+                #
                 # In a real implementation, we would:
                 # 1. Port scan common MCP ports
                 # 2. Try to connect and verify MCP protocol

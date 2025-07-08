@@ -82,49 +82,28 @@ class AuthEventProcessor:
         Each event is processed according to authentication event handling logic.
         """
         self.logger.info("Authentication event processor started.")
-        
         while not self._stop_event.is_set():
             try:
                 event = await asyncio.wait_for(self.queue.get(), timeout=1.0)
-                
-                if isinstance(event, AuthResultEvent):
-                    log = self.logger.bind(
-                        server_id=event.server_id,
-                        success=event.success
-                    )
-                    log.info("Received AuthResultEvent.")
-                    
-                    if event.success and event.auth_data:
-                        self.authenticated_server_details[event.server_id] = event.auth_data
-                        server_info = self.discovered_servers_info.get(event.server_id)
-                        
-                        if server_info and self.mcp_client_agent and self.conversion_agent:
-                            log.debug("Requesting tool list from MCPClientAgent.")
-                            # Fetch tools and trigger conversion
-                            tools_list = await self.mcp_client_agent.get_tools_for_server(server_info)
-                            if tools_list:
-                                log.debug("Tools fetched, requesting schema conversion.", num_tools=len(tools_list))
-                                await self.conversion_agent.convert_schemas_command(server_info, tools_list)
-                            else:
-                                log.warning("No tools fetched for authenticated server.")
-                        else:
-                            if not server_info:
-                                log.warning("Server info not found for authenticated server.")
-                            if not self.mcp_client_agent:
-                                log.error("MCPClientAgent not available.")
-                            if not self.conversion_agent:
-                                log.error("ConversionAgent not available.")
-                    else:
-                        # Remove if auth failed
-                        self.authenticated_server_details.pop(event.server_id, None)
-                else:
+
+                if not isinstance(event, AuthResultEvent):
                     self.logger.warning(
                         "Received unknown event on auth_event_queue",
-                        event_type=type(event).__name__
+                        event_type=type(event).__name__,
                     )
-                    
+                    self.queue.task_done()
+                    continue
+
+                log = self.logger.bind(server_id=event.server_id, success=event.success)
+                log.info("Received AuthResultEvent.")
+
+                if event.success and event.auth_data:
+                    self._handle_successful_auth(event, log)
+                else:
+                    self.authenticated_server_details.pop(event.server_id, None)
+
                 self.queue.task_done()
-                
+
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
@@ -132,3 +111,28 @@ class AuthEventProcessor:
                 break
             except Exception as e:
                 self.logger.exception("Error in authentication event processor", error=str(e))
+
+    async def _handle_successful_auth(self, event: AuthResultEvent, log: structlog.BoundLogger) -> None:
+        self.authenticated_server_details[event.server_id] = event.auth_data
+        server_info = self.discovered_servers_info.get(event.server_id)
+
+        if not server_info:
+            log.warning("Server info not found for authenticated server.")
+            return
+
+        if not self.mcp_client_agent:
+            log.error("MCPClientAgent not available.")
+            return
+
+        if not self.conversion_agent:
+            log.error("ConversionAgent not available.")
+            return
+
+        log.debug("Requesting tool list from MCPClientAgent.")
+        tools_list = await self.mcp_client_agent.get_tools_for_server(server_info)
+
+        if tools_list:
+            log.debug("Tools fetched, requesting schema conversion.", num_tools=len(tools_list))
+            await self.conversion_agent.convert_schemas_command(server_info, tools_list)
+        else:
+            log.warning("No tools fetched for authenticated server.")
