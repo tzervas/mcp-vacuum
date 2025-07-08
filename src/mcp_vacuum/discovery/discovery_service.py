@@ -3,19 +3,21 @@ Service responsible for discovering MCP servers on the network
 using various protocols like mDNS, SSDP.
 """
 import asyncio
+import ipaddress  # For IP address and network validation
 import socket
-import ipaddress # For IP address and network validation
-from typing import List, Dict, Optional, Set, AsyncGenerator
-from urllib.parse import urlparse
+import time  # For TTL cache
+from collections.abc import AsyncGenerator
 
-import structlog
-from zeroconf import ServiceStateChange, Zeroconf
-from zeroconf.asyncio import AsyncServiceBrowser, AsyncZeroconf, AsyncServiceInfo
+import structlog  # type: ignore[import-not-found]
+from zeroconf import ServiceStateChange, Zeroconf  # type: ignore[import-not-found]
+from zeroconf.asyncio import AsyncServiceBrowser, AsyncServiceInfo, AsyncZeroconf  # type: ignore[import-not-found]
 
-import time # For TTL cache
-from ..config import DiscoveryConfig, Config
+from ..config import Config, DiscoveryConfig
+from ..models.common import (  # Assuming these are relevant for initial record
+    AuthMethod,
+    TransportType,
+)
 from ..models.mcp import MCPServiceRecord
-from ..models.common import AuthMethod, TransportType # Assuming these are relevant for initial record
 
 logger = structlog.get_logger(__name__)
 
@@ -30,11 +32,11 @@ class MCPDiscoveryService:
         self.discovery_config: DiscoveryConfig = app_config.discovery
         self.logger = logger.bind(service="MCPDiscoveryService")
         # Cache: service_id -> (MCPServiceRecord, discovery_timestamp)
-        self._discovered_services_cache: Dict[str, Tuple[MCPServiceRecord, float]] = {}
-        self._active_discoveries: Set[asyncio.Task] = set()
+        self._discovered_services_cache: dict[str, Tuple[MCPServiceRecord, float]] = {}
+        self._active_discoveries: set[asyncio.Task] = set()
 
 
-    async def discover_servers_mdns(self, timeout: Optional[int] = None) -> AsyncGenerator[MCPServiceRecord, None]:
+    async def discover_servers_mdns(self, timeout: int | None = None) -> AsyncGenerator[MCPServiceRecord, None]:
         """
         Discovers MCP servers using mDNS/DNS-SD.
         Yields MCPServiceRecord as they are discovered.
@@ -48,7 +50,7 @@ class MCPDiscoveryService:
         self.logger.info("Starting mDNS discovery", service_types=service_types_to_query, timeout=timeout)
 
         # Discovered services in this specific scan session to avoid re-yielding from self._discovered_services
-        session_discovered_ids: Set[str] = set()
+        session_discovered_ids: set[str] = set()
 
         mdns_queue = asyncio.Queue()
         self._mdns_internal_queue = mdns_queue # Share queue with processor for _process_mdns_service_info
@@ -119,7 +121,7 @@ class MCPDiscoveryService:
             self.logger.info("mDNS discovery finalized.")
 
 
-    async def _process_mdns_service_info(self, zc: Zeroconf, service_type: str, name: str, session_ids: Set[str]):
+    async def _process_mdns_service_info(self, zc: Zeroconf, service_type: str, name: str, session_ids: set[str]):
         """Helper to resolve and process service info for mDNS."""
         log = self.logger.bind(service_name=name, service_type=service_type)
         try:
@@ -180,7 +182,7 @@ class MCPDiscoveryService:
             log.exception("Error processing mDNS service info", error=str(e))
 
 
-    async def discover_servers_ssdp(self, timeout: Optional[int] = None) -> AsyncGenerator[MCPServiceRecord, None]:
+    async def discover_servers_ssdp(self, timeout: int | None = None) -> AsyncGenerator[MCPServiceRecord, None]:
         """
         Discovers MCP servers using SSDP/UPnP.
         Yields MCPServiceRecord as they are discovered.
@@ -284,7 +286,7 @@ class MCPDiscoveryService:
             self.logger.warning("Could not parse IP from service endpoint for filtering", endpoint=str(service_record.endpoint), error=str(e))
             return False # Default to deny if IP parsing fails
 
-    def get_cached_server(self, server_id: str) -> Optional[MCPServiceRecord]:
+    def get_cached_server(self, server_id: str) -> MCPServiceRecord | None:
         """Returns a cached MCPServiceRecord if found and not expired."""
         cached_entry = self._discovered_services_cache.get(server_id)
         if cached_entry:
@@ -297,7 +299,7 @@ class MCPDiscoveryService:
                 del self._discovered_services_cache[server_id]
         return None
 
-    def get_all_cached_servers(self) -> List[MCPServiceRecord]:
+    def get_all_cached_servers(self) -> list[MCPServiceRecord]:
         """Returns all currently cached and valid (non-expired TTL) MCPServiceRecords."""
         valid_records = []
         now = time.time()

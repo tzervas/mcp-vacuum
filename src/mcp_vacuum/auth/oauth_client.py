@@ -104,7 +104,7 @@ class OAuth2Client:
         self.logger.info("Authorization URL created", url_host=urlparse(auth_url).hostname)
         return auth_url, state, pkce.code_verifier
 
-    def _prepare_token_request(self, grant_type: str, token_request_data: TokenRequest) -> Tuple[dict, dict, aiohttp.ClientTimeout]:
+def _prepare_token_request(self, grant_type: str, token_request_data: TokenRequest) -> tuple[dict, dict, aiohttp.ClientTimeout]:
         """
         Prepares the token request payload, headers and timeout settings.
 
@@ -210,7 +210,7 @@ class OAuth2Client:
         except (json.JSONDecodeError, ValueError):
             raise MCPAuthError(f"Token request failed with status {status}. Response: {body[:500]}")
 
-    def _parse_token_response(self, token_data: dict, existing_refresh_token: Optional[str] = None) -> OAuth2Token:
+def _parse_token_response(self, token_data: dict, existing_refresh_token: str | None = None) -> OAuth2Token:
         """
         Parses and validates the token response data.
 
@@ -238,7 +238,13 @@ class OAuth2Client:
             self.logger.error("Failed to validate token response", error=str(e), raw_data=token_data)
             raise MCPAuthError(f"Invalid token data received: {e}") from e
 
-    async def exchange_code_for_token(self, code: str, code_verifier: str, state: Optional[str] = None, expected_state: Optional[str] = None) -> OAuth2Token:
+async def exchange_code_for_token(
+        self,
+        code: str,
+        code_verifier: str,
+        state: str | None = None,
+        expected_state: str | None = None,
+    ) -> OAuth2Token:
         """
         Exchanges an authorization code for an access token and refresh token.
 

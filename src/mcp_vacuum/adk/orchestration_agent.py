@@ -7,12 +7,13 @@ import asyncio
 import structlog
 
 from ..config import Config
+from .auth_agent import AuthenticationAgent, AuthResultEvent
 from .base import MCPVacuumBaseAgent
+from .conversion_agent import ConversionAgent, SchemaConversionResultEvent
+
 # Child agent types (to be created)
-from .discovery_agent import DiscoveryAgent
-from .auth_agent import AuthenticationAgent
-from .conversion_agent import ConversionAgent
-from .mcp_client_agent import MCPClientAgent # Manages communication with specific MCP servers
+from .discovery_agent import DiscoveredServerEvent, DiscoveryAgent
+from .mcp_client_agent import MCPClientAgent  # Manages communication with specific MCP servers
 
 # Event processors
 from .discovery_handler import DiscoveryEventProcessor

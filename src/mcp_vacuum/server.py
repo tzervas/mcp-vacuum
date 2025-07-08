@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
@@ -33,9 +32,9 @@ class ServerStatus(Enum):
 class ServerCapabilities:
     """MCP Server capabilities."""
 
-    tools: List[str] = field(default_factory=list)
-    resources: List[str] = field(default_factory=list)
-    prompts: List[str] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)
+    resources: list[str] = field(default_factory=list)
+    prompts: list[str] = field(default_factory=list)
     sampling: bool = False
     logging: bool = False
 
@@ -44,13 +43,13 @@ class AuthCredentials(BaseModel):
     """Authentication credentials for a server."""
 
     method: AuthMethod
-    username: Optional[str] = None
-    password: Optional[str] = None
-    token: Optional[str] = None
-    certificate_path: Optional[str] = None
-    private_key_path: Optional[str] = None
-    oauth_config: Optional[Dict[str, str]] = None
-    custom_data: Optional[Dict[str, str]] = None
+    username: str | None = None
+    password: str | None = None
+    token: str | None = None
+    certificate_path: str | None = None
+    private_key_path: str | None = None
+    oauth_config: dict[str, str] | None = None
+    custom_data: dict[str, str] | None = None
 
     @field_validator("method", mode="before")
     @classmethod
@@ -65,24 +64,24 @@ class MCPServer(BaseModel):
     """Represents an MCP Server."""
 
     id: str = Field(..., description="Unique server identifier")
-    name: Optional[str] = Field(None, description="Human-readable server name")
+    name: str | None = Field(None, description="Human-readable server name")
     endpoint: str = Field(..., description="Server endpoint URL")
-    version: Optional[str] = Field(None, description="Server version")
+    version: str | None = Field(None, description="Server version")
     status: ServerStatus = Field(
         default=ServerStatus.DISCOVERED, description="Current server status"
     )
-    capabilities: Optional[ServerCapabilities] = Field(
+    capabilities: ServerCapabilities | None = Field(
         None, description="Server capabilities"
     )
-    auth_credentials: Optional[AuthCredentials] = Field(
+    auth_credentials: AuthCredentials | None = Field(
         None, description="Authentication credentials"
     )
-    metadata: Dict[str, str] = Field(
+    metadata: dict[str, str] = Field(
         default_factory=dict, description="Additional server metadata"
     )
-    schema: Optional[dict] = Field(None, description="Generated Kagent schema")
-    last_seen: Optional[str] = Field(None, description="Last time server was seen")
-    security_info: Dict[str, bool] = Field(
+    schema: dict | None = Field(None, description="Generated Kagent schema")
+    last_seen: str | None = Field(None, description="Last time server was seen")
+    security_info: dict[str, bool] = Field(
         default_factory=dict, description="Security assessment"
     )
 
@@ -144,7 +143,7 @@ class MCPServer(BaseModel):
         """Add metadata to the server."""
         self.metadata[key] = value
 
-    def get_security_assessment(self) -> Dict[str, bool]:
+    def get_security_assessment(self) -> dict[str, bool]:
         """Get security assessment of the server."""
         assessment = {
             "uses_https": self.is_secure,
