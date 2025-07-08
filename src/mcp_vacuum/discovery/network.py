@@ -118,10 +118,9 @@ def get_active_interfaces() -> List[str]:
     Returns:
         List[str]: List of active interface names.
     """
-    active = []
-    for iface in get_network_interfaces():
-        if get_interface_ips(iface):
-            active.append(iface)
+    active = [
+        iface for iface in get_network_interfaces() if get_interface_ips(iface)
+    ]
 return active
 
 
