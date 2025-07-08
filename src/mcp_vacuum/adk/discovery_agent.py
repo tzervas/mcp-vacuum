@@ -57,9 +57,14 @@ class DiscoveryAgent(MCPVacuumBaseAgent):
             "Received command to discover servers.", target_networks=target_networks
         )
 
-        # Allow overlapping discovery operations by not stopping current
-        # discovery tasks. Each discovery command will start new discovery
-        # tasks and track them.
+        # Allow overlapping discovery operations by not stopping current discovery tasks.
+        # Each discovery command will start new discovery tasks and track them.
+        # This relies on the underlying MCPDiscoveryService being capable of handling
+        # concurrent or overlapping calls to its discovery methods (e.g., discover_servers_mdns).
+        # If MCPDiscoveryService instances or their listening mechanisms are not designed for
+        # concurrent operation, this could lead to issues like port conflicts or mixed results.
+        # The DiscoveryAgent itself manages tasks in a list and uses an asyncio.Queue,
+        # which are safe for concurrent use in this context.
 
         # mDNS Discovery Task
         if self.app_config.discovery.enable_mdns:

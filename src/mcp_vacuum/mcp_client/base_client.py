@@ -181,8 +181,9 @@ class BaseMCPClient(abc.ABC):
                 # The retry loop here provides an additional layer of retries if the CB is CLOSED/HALF_OPEN.
                 last_exception = e
                 if is_idempotent and attempt < max_attempts - 1: # Only retry if idempotent
-                    backoff_time = initial_backoff * (2 ** attempt) + random.uniform(0, 0.1 * initial_backoff)
-                    backoff_time = min(backoff_time, max_backoff) # Cap at max_backoff
+                    # Standard exponential backoff with full jitter: random delay between 0 and capped backoff
+                    capped_backoff = min(initial_backoff * (2 ** attempt), max_backoff)
+                    backoff_time = random.uniform(0, capped_backoff)
                     log_attempt.warning(f"Connection error encountered. Retrying in {backoff_time:.2f}s...", error_message=str(e), error_type=type(e).__name__)
                     await asyncio.sleep(backoff_time)
                 else:

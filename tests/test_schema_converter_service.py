@@ -1,5 +1,6 @@
-"""Unit tests for SchemaConverterService."""
-
+"""
+Unit tests for SchemaConverterService.
+"""
 from typing import Any, Dict, Optional
 
 import pytest  # type: ignore[import-not-found]
@@ -8,6 +9,7 @@ from mcp_vacuum.config import Config
 from mcp_vacuum.models.common import RiskLevel, ToolCategory
 from mcp_vacuum.models.kagent import KagentTool
 from mcp_vacuum.models.mcp import MCPAnnotations, MCPServerInfo, MCPTool
+
 from mcp_vacuum.schema_gen.schema_converter_service import (
     ConversionServiceResult,
     SchemaConverterService,

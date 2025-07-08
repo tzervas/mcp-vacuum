@@ -2,12 +2,24 @@
 Base class for all MCP Vacuum agents using the Google ADK.
 """
 
+import abc
 from typing import Any, Dict, Optional
 import structlog  # type: ignore[import-not-found]
-from google_adk import BaseAgent  # type: ignore[import-not-found]
 
-# Or: from adk import BaseAgent if adk is top-level
 from ..config import Config
+
+
+class BaseAgent(abc.ABC):
+    """Minimal base agent implementation until Google ADK integration."""
+    @abc.abstractmethod
+    async def start(self) -> None:
+        """Start the agent."""
+        pass
+
+    @abc.abstractmethod
+    async def stop(self) -> None:
+        """Stop the agent."""
+        pass
 
 
 class MCPVacuumBaseAgent(BaseAgent):
