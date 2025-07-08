@@ -33,7 +33,7 @@ def get_windows_interfaces() -> List[str]:
                     interfaces.append(parts[3])  # Interface name is in 4th column
         return interfaces
     except (subprocess.SubprocessError, IndexError) as e:
-        logger.error("Failed to get Windows interfaces: %s", str(e))
+        logger.error("Failed to get Windows interfaces", error=str(e))
         return []
 
 def get_linux_interfaces() -> List[str]:
