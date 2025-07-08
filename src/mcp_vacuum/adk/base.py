@@ -1,8 +1,8 @@
 """
 Base class for all MCP Vacuum agents using the Google ADK.
 """
-from typing import Any
 
+from typing import Any, Dict, Optional
 import structlog  # type: ignore[import-not-found]
 from google_adk import BaseAgent  # type: ignore[import-not-found]
 
@@ -54,7 +54,7 @@ class MCPVacuumBaseAgent(BaseAgent):
         Child agents can override this to perform setup tasks.
         """
         self.logger.info("Agent starting.")
-        await super().start() # Call ADK BaseAgent's start if it has one
+        await super().start()  # Call ADK BaseAgent's start if it has one
 
     async def stop(self) -> None:
         """
@@ -62,7 +62,7 @@ class MCPVacuumBaseAgent(BaseAgent):
         Child agents can override this to perform cleanup tasks.
         """
         self.logger.info("Agent stopping.")
-        await super().stop() # Call ADK BaseAgent's stop if it has one
+        await super().stop()  # Call ADK BaseAgent's stop if it has one
 
     # Example of an event handling method (to be defined by ADK or custom event
     # system)
@@ -89,6 +89,7 @@ class MCPVacuumBaseAgent(BaseAgent):
     # ) -> None:
     #     # Logic to send event to a specific child
     #     pass
+
 
 # Note: The actual methods like `start`, `stop`, `handle_event`, `send_event`
 # will depend heavily on the Google ADK's API.

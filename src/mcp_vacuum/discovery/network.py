@@ -38,28 +38,21 @@ def get_windows_interfaces() -> List[str]:
 
 
 def get_linux_interfaces() -> List[str]:
-    """Get active, non-virtual network interfaces on Linux using ip command.
+    """Get network interfaces on Linux using ip command.
 
     Returns:
         List[str]: List of interface names.
     """
     try:
         output = subprocess.check_output(
-            ["ip", "-o", "link", "show"], universal_newlines=True
+            ["ip", "link", "show"], universal_newlines=True
         )
         interfaces = []
-        for line in output.splitlines():
-            # Example line: 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> ...
-            parts = line.split(": ", 2)
-            if len(parts) < 2:
-                continue
-            iface = parts[1].split("@")[0]
-            # Skip loopback, virtual (with '@'), and down interfaces
-            if iface == "lo" or "@" in parts[1]:
-                continue
-            # Check if interface is UP
-            if "<" in parts[2] and "UP" in parts[2].split(">")[0]:
-                interfaces.append(iface)
+        for line in output.split("\n"):
+            if ": " in line:  # Lines with interfaces contain ": "
+                iface = line.split(": ")[1].split("@")[0]  # Get interface name
+                if iface != "lo":  # Skip loopback
+                    interfaces.append(iface)
         return interfaces
     except subprocess.SubprocessError as e:
         logger.error("Failed to get Linux interfaces", error=str(e))
@@ -134,9 +127,7 @@ def get_active_interfaces() -> List[str]:
     Returns:
         List[str]: List of active interface names.
     """
-    return [
-        iface for iface in get_network_interfaces() if get_interface_ips(iface)
-    ]
+    return [iface for iface in get_network_interfaces() if get_interface_ips(iface)]
 
 
 class NetworkDiscovery:
@@ -157,12 +148,15 @@ class NetworkDiscovery:
         for iface in interfaces:
             ips = get_interface_ips(iface)
             for ip in ips:
-                # Create a service record for each discovered IP
+                # Create a service record for each discovered IP.
+                # Note: MCPServiceRecord is immutable, so we create a new one each time
+                # with all required fields set at initialization.
+                #
                 # In a real implementation, we would:
                 # 1. Port scan common MCP ports
                 # 2. Try to connect and verify MCP protocol
                 # 3. Get capabilities and version info
-                service_record = MCPServiceRecord(
+                yield MCPServiceRecord(
                     id=f"network-{iface}-{ip}",
                     name=f"Service on {ip}",
                     endpoint=f"http://{ip}:80",
@@ -171,4 +165,3 @@ class NetworkDiscovery:
                     version="1.0",  # This would be determined by actual connection
                     auth_method=AuthMethod.NONE,  # This would be determined by actual connection
                 )
-                yield service_record
