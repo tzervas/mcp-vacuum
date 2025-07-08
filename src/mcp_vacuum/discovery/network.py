@@ -38,21 +38,28 @@ def get_windows_interfaces() -> List[str]:
 
 
 def get_linux_interfaces() -> List[str]:
-    """Get network interfaces on Linux using ip command.
+    """Get active, non-virtual network interfaces on Linux using ip command.
 
     Returns:
         List[str]: List of interface names.
     """
     try:
         output = subprocess.check_output(
-            ["ip", "link", "show"], universal_newlines=True
+            ["ip", "-o", "link", "show"], universal_newlines=True
         )
         interfaces = []
-        for line in output.split("\n"):
-            if ": " in line:  # Lines with interfaces contain ": "
-                iface = line.split(": ")[1].split("@")[0]  # Get interface name
-                if iface != "lo":  # Skip loopback
-                    interfaces.append(iface)
+        for line in output.splitlines():
+            # Example line: 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> ...
+            parts = line.split(": ", 2)
+            if len(parts) < 2:
+                continue
+            iface = parts[1].split("@")[0]
+            # Skip loopback, virtual (with '@'), and down interfaces
+            if iface == "lo" or "@" in parts[1]:
+                continue
+            # Check if interface is UP
+            if "<" in parts[2] and "UP" in parts[2].split(">")[0]:
+                interfaces.append(iface)
         return interfaces
     except subprocess.SubprocessError as e:
         logger.error("Failed to get Linux interfaces", error=str(e))
