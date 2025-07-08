@@ -60,6 +60,12 @@ def test_get_active_interfaces():
         assert 'eth0' in interfaces
         assert 'wlan0' not in interfaces  # No IPs, should be excluded
 
+def test_get_interface_ips_no_ips():
+    """Test handling of interface with no IP addresses."""
+    with patch('netifaces.ifaddresses', return_value={}):
+        ips = get_interface_ips('eth0')
+        assert len(ips) == 0
+
 def test_get_interface_ips_error_handling():
     """Test error handling when getting interface IPs."""
     with patch('netifaces.ifaddresses', side_effect=OSError("Test error")):
