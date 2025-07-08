@@ -40,7 +40,7 @@ MCP Vacuum is a Python 3.12-based AI agent designed to automate the discovery of
   - Memory-only storage for access tokens.
 
 ### MCP Interaction
-- **Protocol**: JSON-RPC 2.0 over HTTP.
+- **Protocol**: JSONRPC 2.0 over HTTP.
 - **Operations**:
   - List available tools via `listTools` method.
   - Retrieve tool schemas using `getToolSchema` method.
