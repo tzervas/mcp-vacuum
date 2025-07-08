@@ -1,6 +1,7 @@
 """
 MCP Client implementation using HTTP/HTTPS transport.
 """
+import asyncio
 import json
 from typing import Any
 

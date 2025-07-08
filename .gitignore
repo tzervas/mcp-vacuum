@@ -90,3 +90,9 @@ src/mcp_vacuum/utils/git.py
 
 # ignore internal docs
 # docs/*.pdf
+
+.project-trackers/
+
+# Internal documentation and tracking (moved to mcp-vacuum-internal)
+.local/
+.metadata/
