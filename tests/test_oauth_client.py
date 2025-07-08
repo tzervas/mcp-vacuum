@@ -7,13 +7,14 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest  # type: ignore[import-not-found]
 import aiohttp  # type: ignore[import-not-found]
+import asyncio
 
 from mcp_vacuum.auth.oauth_client import OAuth2Client
 from mcp_vacuum.auth.pkce import generate_pkce_challenge_pair
 from mcp_vacuum.config import Config
 from mcp_vacuum.mcp_client.exceptions import MCPAuthError, MCPConnectionError
 from mcp_vacuum.models.auth import OAuth2ClientConfig as AppOAuthClientConfig
-from mcp_vacuum.models.auth import OAuth2Token, OAuthError
+from mcp_vacuum.models.auth import OAuth2Token, OAuthError, TokenRequest
 
 
 # Default app_config for tests
@@ -356,6 +357,109 @@ def test_parse_token_response_invalid_data(oauth_client):
 
     assert "Invalid token data received" in str(excinfo.value)
 
-# TODO: Add tests for state mismatch in exchange_code_for_token.
-# TODO: Add tests for session management (owned vs provided session).
-# TODO: Test different SSL verification scenarios if _get_session SSL logic becomes more complex.
+@pytest.mark.asyncio
+async def test_exchange_code_state_mismatch(oauth_client):
+    """Test state mismatch handling in code exchange."""
+    with pytest.raises(MCPAuthError) as excinfo:
+        await oauth_client.exchange_code_for_token(
+            code="test_code",
+            code_verifier="test_verifier",
+            state="received_state",
+            expected_state="expected_state"
+        )
+    assert "Invalid OAuth state" in str(excinfo.value)
+    assert "CSRF attack" in str(excinfo.value)
+    await oauth_client.close_session()
+
+@pytest.mark.asyncio
+async def test_oauth_client_empty_token_response(oauth_client):
+    """Test handling of empty token responses."""
+    mock_session_post = AsyncMock()
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.text = AsyncMock(return_value="{}")
+
+    mock_session_post.return_value.__aenter__.return_value = mock_response
+    mock_aiohttp_session = MagicMock()
+    mock_aiohttp_session.post = mock_session_post
+
+    with patch.object(oauth_client, '_get_session', AsyncMock(return_value=mock_aiohttp_session)):
+        with pytest.raises(MCPAuthError) as excinfo:
+            await oauth_client.exchange_code_for_token(code="test_code", code_verifier="test_verifier")
+        assert "Invalid token data received" in str(excinfo.value)
+
+    await oauth_client.close_session()
+
+@pytest.mark.asyncio
+async def test_oauth_client_malformed_token_response(oauth_client):
+    """Test handling of malformed token responses."""
+    mock_session_post = AsyncMock()
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.text = AsyncMock(return_value='{"not_access_token":"invalid"}')
+
+    mock_session_post.return_value.__aenter__.return_value = mock_response
+    mock_aiohttp_session = MagicMock()
+    mock_aiohttp_session.post = mock_session_post
+
+    with patch.object(oauth_client, '_get_session', AsyncMock(return_value=mock_aiohttp_session)):
+        with pytest.raises(MCPAuthError) as excinfo:
+            await oauth_client.exchange_code_for_token(code="test_code", code_verifier="test_verifier")
+        assert "Invalid token data received" in str(excinfo.value)
+
+    await oauth_client.close_session()
+
+@pytest.mark.asyncio
+async def test_oauth_client_timeout_handling(oauth_client):
+    """Test handling of network timeouts."""
+    mock_session_post = AsyncMock(side_effect=asyncio.TimeoutError())
+    mock_aiohttp_session = MagicMock()
+    mock_aiohttp_session.post = mock_session_post
+
+    with patch.object(oauth_client, '_get_session', AsyncMock(return_value=mock_aiohttp_session)):
+        with pytest.raises(MCPConnectionError) as excinfo:
+            await oauth_client.exchange_code_for_token(code="test_code", code_verifier="test_verifier")
+        assert "timed out" in str(excinfo.value)
+
+    await oauth_client.close_session()
+
+@pytest.mark.asyncio
+async def test_session_ownership_cleanup(oauth_client_config_data, app_config):
+    """Test session cleanup based on ownership."""
+    # Test with owned session
+    owned_client = OAuth2Client(client_config=oauth_client_config_data, app_config=app_config)
+    await owned_client._get_session()  # Create the session
+    assert owned_client._session is not None
+    assert owned_client._session_owner is True
+    await owned_client.close_session()
+    assert owned_client._session is None
+
+    # Test with provided session
+    external_session = aiohttp.ClientSession()
+    provided_client = OAuth2Client(
+        client_config=oauth_client_config_data,
+        app_config=app_config,
+        session=external_session
+    )
+    assert provided_client._session is external_session
+    assert provided_client._session_owner is False
+    await provided_client.close_session()  # Should not close the provided session
+    assert not external_session.closed
+    await external_session.close()  # Clean up the external session
+
+@pytest.mark.asyncio
+async def test_ssl_configuration(oauth_client_config_data, app_config):
+    """Test SSL configuration in session creation."""
+    # Test with SSL verification enabled (default)
+    app_config.mcp_client.ssl_verify = True
+    client_ssl_verify = OAuth2Client(client_config=oauth_client_config_data, app_config=app_config)
+    session = await client_ssl_verify._get_session()
+    assert session.connector._ssl is None  # Default SSL handling
+    await client_ssl_verify.close_session()
+
+    # Test with SSL verification disabled
+    app_config.mcp_client.ssl_verify = False
+    client_no_ssl = OAuth2Client(client_config=oauth_client_config_data, app_config=app_config)
+    session = await client_no_ssl._get_session()
+    assert session.connector._ssl is False  # SSL verification disabled
+    await client_no_ssl.close_session()

@@ -136,6 +136,31 @@ class TestMCPServer:
             MCPServer(id="test4", endpoint="")
         assert "Invalid URL format" in str(exc_info.value)
 
+        # Test invalid protocol
+        with pytest.raises(ValidationError) as exc_info:
+            MCPServer(id="test5", endpoint="ftp://example.com")
+        assert "Invalid URL protocol" in str(exc_info.value)
+
+        # Test invalid port number
+        with pytest.raises(ValidationError) as exc_info:
+            MCPServer(id="test6", endpoint="http://example.com:99999")
+        assert "Invalid port number" in str(exc_info.value)
+
+        # Test localhost with public port
+        with pytest.raises(ValidationError) as exc_info:
+            MCPServer(id="test7", endpoint="http://localhost:80")
+        assert "Localhost with public port" in str(exc_info.value)
+
+        # Test IP address with invalid format
+        with pytest.raises(ValidationError) as exc_info:
+            MCPServer(id="test8", endpoint="http://256.256.256.256")
+        assert "Invalid IP address" in str(exc_info.value)
+
+        # Test URL with fragment
+        with pytest.raises(ValidationError) as exc_info:
+            MCPServer(id="test9", endpoint="http://example.com#fragment")
+        assert "URL fragments not allowed" in str(exc_info.value)
+
     def test_server_properties(self):
         """Test server property methods work correctly."""
         # Test HTTP server

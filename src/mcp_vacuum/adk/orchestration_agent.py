@@ -174,10 +174,13 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
 
         await self._initialize_child_agents()
 
-        # Start event processors
-        await self.discovery_processor.start()
-        await self.auth_processor.start()
-        await self.conversion_processor.start()
+        # Start event processors with None checks
+        if self.discovery_processor:
+            await self.discovery_processor.start()
+        if self.auth_processor:
+            await self.auth_processor.start()
+        if self.conversion_processor:
+            await self.conversion_processor.start()
 
         if self.discovery_agent:
             self.logger.info("Sending initial discovery command.", target_networks=target_networks)
@@ -238,13 +241,24 @@ class OrchestrationAgent(MCPVacuumBaseAgent):
     async def stop_workflow_processing(self):
         self.logger.info("Stopping event processors...")
         self._stop_event.set()
-        # Stop all event processors
-        if self.discovery_processor:
-            await self.discovery_processor.stop()
-        if self.auth_processor:
-            await self.auth_processor.stop()
-        if self.conversion_processor:
-            await self.conversion_processor.stop()
+        
+        processors = [
+            self.discovery_processor,
+            self.auth_processor,
+            self.conversion_processor
+        ]
+        
+        for processor in processors:
+            if processor:
+                try:
+                    await processor.stop()
+                except Exception as e:
+                    self.logger.error(
+                        "Error stopping processor",
+                        processor=processor.__class__.__name__,
+                        error=str(e)
+                    )
+        
         self.logger.info("Event processors stopped.")
 
     def get_summary(self) -> Dict[str, int]:

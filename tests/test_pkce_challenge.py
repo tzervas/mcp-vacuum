@@ -2,7 +2,7 @@
 Unit tests for PKCE Challenge validation.
 
 Tests for invalid code verifier characters as per RFC 7636:
-- The code verifier should only contain unreserved characters: [A-Za-z0-9\-._~]
+    - The code verifier should only contain unreserved characters: [A-Za-z0-9-._~]
 - Test inputs containing spaces, Unicode non-ASCII, and forbidden symbols
 - Assert that the Pydantic model raises a validation error
 - Add tests for valid cases to confirm no false positives

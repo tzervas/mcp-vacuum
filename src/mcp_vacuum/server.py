@@ -5,19 +5,12 @@ from enum import Enum
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
-class AuthMethod(Enum):
-    """Supported authentication methods."""
-
-    NONE = "none"
-    TOKEN = "token"
-    CERTIFICATE = "certificate"
-    USERNAME_PASSWORD = "username_password"
-    OAUTH2 = "oauth2"
-    CUSTOM = "custom"
-
-
+from .models.common import AuthMethod
 class ServerStatus(Enum):
     """Server status enumeration."""
 
@@ -91,15 +84,12 @@ class MCPServer(BaseModel):
     @classmethod
     def validate_endpoint(cls, v):
         """Validate endpoint URL format and scheme."""
-        try:
-            parsed = urlparse(v)
-            if not parsed.scheme or not parsed.netloc:
-                raise ValueError("Invalid URL format")
-            if parsed.scheme.lower() not in ["http", "https"]:
-                raise ValueError("URL scheme must be either HTTP or HTTPS")
-            return v
-        except Exception as e:
-            raise ValueError(f"Invalid endpoint URL: {e}")
+        parsed = urlparse(v)
+        if parsed.scheme.lower() not in ["http", "https"]:
+            msg = f"Invalid URL scheme '{parsed.scheme}'. Must be HTTP or HTTPS."
+            logger.warning(msg, url=v)
+            raise ValueError(msg)
+        return v
 
     @property
     def host(self) -> str:

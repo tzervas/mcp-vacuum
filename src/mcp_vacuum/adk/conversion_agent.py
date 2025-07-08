@@ -2,6 +2,7 @@
 ConversionAgent: Handles schema conversion from MCP format to Kagent format.
 """
 import asyncio
+from typing import Any
 
 import structlog  # type: ignore[import-not-found]
 
@@ -62,13 +63,15 @@ class ConversionAgent(MCPVacuumBaseAgent):
         self.output_queue = output_queue
         
         # Safe retrieval and normalization of fail_fast_conversion setting
-        fail_fast = getattr(app_config.agent_settings, "fail_fast_conversion", False)
-        # Handle string values by converting to boolean
-        if isinstance(fail_fast, str):
-            self.fail_fast_conversion = fail_fast.lower() in ("true", "1", "yes", "on")
-        else:
-            # Handle boolean values directly or coerce other types to boolean
-            self.fail_fast_conversion = bool(fail_fast)
+        original_value = getattr(app_config.agent_settings, "fail_fast_conversion", False)
+        self.fail_fast_conversion = self._parse_fail_fast_setting(original_value)
+
+        if not isinstance(original_value, bool):
+            self.logger.warning(
+                "Non-boolean fail_fast_conversion setting provided",
+                original_value=original_value,
+                converted_value=self.fail_fast_conversion
+            )
         
         self.logger.info("ConversionAgent initialized.", fail_fast_conversion=self.fail_fast_conversion)
         # self._conversion_tasks: Dict[str, asyncio.Task] = {} # server_id -> task, if managing ongoing conversions
@@ -240,6 +243,13 @@ class ConversionAgent(MCPVacuumBaseAgent):
                 error_message=f"Overall conversion process failed: {e!s}",
             )
             await self.output_queue.put(error_event)
+
+    def _parse_fail_fast_setting(self, setting: Any) -> bool:
+        if isinstance(setting, bool):
+            return setting
+        if isinstance(setting, str):
+            return setting.lower() in ("true", "1", "yes", "on")
+        return bool(setting)
 
     async def start(self) -> None:  # ADK lifecycle
         await super().start()
