@@ -156,7 +156,7 @@ class NetworkDiscovery:
                 # 1. Port scan common MCP ports
                 # 2. Try to connect and verify MCP protocol
                 # 3. Get capabilities and version info
-                service_record = MCPServiceRecord(
+                yield MCPServiceRecord(
                     id=f"network-{iface}-{ip}",
                     name=f"Service on {ip}",
                     endpoint=f"http://{ip}:80",
@@ -165,4 +165,3 @@ class NetworkDiscovery:
                     version="1.0",  # This would be determined by actual connection
                     auth_method=AuthMethod.NONE,  # This would be determined by actual connection
                 )
-                yield service_record
