@@ -121,7 +121,6 @@ def get_active_interfaces() -> List[str]:
     active = [
         iface for iface in get_network_interfaces() if get_interface_ips(iface)
     ]
-return active
 
 
 class NetworkDiscovery:
