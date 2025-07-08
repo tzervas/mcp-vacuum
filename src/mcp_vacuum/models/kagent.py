@@ -50,36 +50,9 @@ class KagentToolSpec(BasePydanticModel):
     validation_rules: Optional[Dict[str, Any]] = None
 
 class KagentTool(BasePydanticModel):
-    """Root model for a Kagent tool definition."""
-    apiVersion: str = Field(pattern=r"^kagent\.ai/v1(alpha\d+|beta\d+)?$")
-    kind: str = Field(default="Tool")
-    metadata: KagentMetadata
-    spec: KagentToolSpec
-
-    @validator("kind")
-    def validate_kind(cls, v: str) -> str:
-        """Validate 'kind' field."""
-        if v != "Tool":
-            raise ValueError("kind must be 'Tool'")
-        return v
-
-class ConversionMetadataModel(BasePydanticModel):
-    """Metadata about the conversion process."""
-    source_schema_version: str
-    source_system: str
-    conversion_timestamp: str
-    validation_result: Optional[ValidationResult] = None
-    original_tool_name: str
-    conversion_version: str
-    semantic_score: float = Field(ge=0, le=1)
-    field_mappings: Dict[str, str] = Field(default_factory=dict)
-
-class ConversionResult(BasePydanticModel):
-    """Results of converting an MCP tool to Kagent format."""
-    tool: KagentTool
-    metadata: ConversionMetadataModel
-    original_schema: Dict[str, Any]  # The original MCP schema
-    """Root model for a Kagent tool definition."""
+    """Root model for a Kagent tool definition.
+    Based on Kubernetes-style resource definition.
+    """
     apiVersion: str = Field(pattern=r"^kagent\.ai/v1(alpha\d+|beta\d+)?$")
     kind: str = Field(default="Tool")
     metadata: KagentMetadata
