@@ -262,7 +262,7 @@ async def test_prepare_token_request(oauth_client):
         client_id=oauth_client.client_config.client_id
     )
 
-    payload, headers, timeout = oauth_client._prepare_token_request("test_grant", token_request_data)
+    payload, headers, timeout = oauth_client._prepare_token_request(token_request_data)
 
     # Check payload
     assert payload == token_request_data.model_dump(exclude_none=True, by_alias=True)

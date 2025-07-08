@@ -104,12 +104,11 @@ class OAuth2Client:
         self.logger.info("Authorization URL created", url_host=urlparse(auth_url).hostname)
         return auth_url, state, pkce.code_verifier
 
-def _prepare_token_request(self, grant_type: str, token_request_data: TokenRequest) -> tuple[dict, dict, aiohttp.ClientTimeout]:
+def _prepare_token_request(self, token_request_data: TokenRequest) -> tuple[dict, dict, aiohttp.ClientTimeout]:
         """
         Prepares the token request payload, headers and timeout settings.
 
         Args:
-            grant_type: The OAuth2 grant type (e.g. 'authorization_code' or 'refresh_token').
             token_request_data: The token request data object.
 
         Returns:
@@ -274,7 +273,7 @@ async def exchange_code_for_token(
             code_verifier=code_verifier
         )
 
-        payload, headers, timeout = self._prepare_token_request("authorization_code", token_request_data)
+        payload, headers, timeout = self._prepare_token_request(token_request_data)
         token_data = await self._send_token_request(payload, headers, timeout)
         return self._parse_token_response(token_data)
 
@@ -304,7 +303,7 @@ async def exchange_code_for_token(
             # scope: Optional, some servers allow requesting same or narrower scope
         )
 
-        payload, headers, timeout = self._prepare_token_request("refresh_token", token_request_data)
+        payload, headers, timeout = self._prepare_token_request(token_request_data)
         token_data = await self._send_token_request(payload, headers, timeout)
         return self._parse_token_response(token_data, refresh_token_value)
 
