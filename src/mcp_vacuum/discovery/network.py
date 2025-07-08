@@ -77,8 +77,8 @@ def get_network_interfaces(skip_loopback: bool = True) -> List[str]:
             ]
         return interfaces
     except Exception as e:
-        logger.warning("netifaces discovery failed: %s, trying platform-specific fallback", str(e))
-        
+        logger.warning("netifaces discovery failed, trying platform-specific fallback", error=str(e))
+
         # Platform-specific fallbacks
         if platform.system() == "Windows":
             return get_windows_interfaces()
