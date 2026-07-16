@@ -70,14 +70,20 @@ async def test_keyring_operations(mock_keyring, platform_name):
 
 async def test_network_discovery(mock_network_discovery, platform_name):
     """Test platform-specific network discovery functionality."""
+    import socket
+
     logger.info(f"Testing network discovery on {platform_name}")
 
-    # Test port availability check
-    mock_network_discovery.return_value.bind.return_value = None
-    mock_network_discovery.return_value.getsockname.return_value = ('127.0.0.1', 12345)
+    # Exercise mocked socket factory without real bind (sandbox may deny poll/register)
+    mock_sock = MagicMock()
+    mock_sock.bind.return_value = None
+    mock_sock.getsockname.return_value = ('127.0.0.1', 12345)
+    mock_network_discovery.return_value = mock_sock
 
-    # Verify socket creation
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
     assert mock_network_discovery.called
+    assert sock.getsockname() == ('127.0.0.1', 12345)
 
     # Test network interface enumeration, skip on Windows
     if platform_name.lower() != 'windows':
@@ -96,21 +102,22 @@ async def test_network_discovery(mock_network_discovery, platform_name):
 async def test_docker_integration(mock_docker_client, platform_name):
     """Test platform-specific Docker integration."""
     logger.info(f"Testing Docker integration on {platform_name}")
-    
-    # Test Docker connection
-    mock_docker_client.ping.return_value = True
-    assert await mock_docker_client.ping()
-    
+
+    # Test Docker connection (AsyncMock may return a coroutine or value)
+    mock_docker_client.ping = AsyncMock(return_value=True)
+    assert await mock_docker_client.ping() is True
+
     # Test container operations
     mock_container = MagicMock()
-    mock_docker_client.containers.run.return_value = mock_container
-    
+    mock_docker_client.containers = MagicMock()
+    mock_docker_client.containers.run = AsyncMock(return_value=mock_container)
+
     container_config = {
         'image': 'test-image:latest',
         'command': 'echo "test"',
         'environment': {'PLATFORM': platform_name}
     }
-    
+
     await mock_docker_client.containers.run(**container_config)
     mock_docker_client.containers.run.assert_called_once_with(**container_config)
 

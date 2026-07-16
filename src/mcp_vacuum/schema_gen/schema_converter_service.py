@@ -229,18 +229,22 @@ class SchemaConverterService:
 
             metadata = KagentMetadata(
                 name=k8s_name,
+                version=getattr(self.app_config, "agent_version", None) or "0.1.0",
+                category=category,
+                risk_level=risk,
+                description=mcp_tool.description,
                 labels={
                     "mcp.vacuum/source": "mcp-vacuum", # Indicate source
                     "mcp.vacuum/server-id": self._sanitize_k8s_name(server_info.id, 63),
                     "mcp.tool/original-name": self._sanitize_k8s_name(mcp_tool.name, 63), # Original name for reference
-                    "kagent.dev/category": category.value,
-                    "kagent.dev/risk-level": risk.value,
+                    "kagent.dev/category": category.value if hasattr(category, "value") else str(category),
+                    "kagent.dev/risk-level": risk.value if hasattr(risk, "value") else str(risk),
                 },
                 annotations={
                     "mcp.vacuum/original-tool-name": mcp_tool.name, # Full original name
                     "mcp.vacuum/server-name": server_info.name,
                     "mcp.vacuum/server-endpoint": str(mcp_tool.server_endpoint or server_info.endpoint),
-                    "mcp.vacuum/conversion-timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+                    "mcp.vacuum/conversion-timestamp": datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z"),
                     "description": mcp_tool.description[:250] + ("..." if len(mcp_tool.description) > 250 else "") # K8s annotation length limits
                 }
             )
@@ -304,11 +308,17 @@ class SchemaConverterService:
             # This would require more detailed field mapping and semantic score calculation.
             conv_meta = ConversionMetadataModel(
                 original_tool_name=mcp_tool.name,
-                conversion_timestamp=datetime.datetime.utcnow(),
-                conversion_version=self.app_config.agent_version if hasattr(self.app_config, "agent_version") else "0.1.0", # Get version from app_config
-                semantic_score=0.85, # Placeholder
-                validation_results=ValidationResult(is_valid=not any(i.severity == ValidationSeverity.ERROR for i in validation_issues), issues=validation_issues, schema_hash="placeholder_hash"),
-                field_mappings={} # Placeholder for field name mappings
+                conversion_timestamp=datetime.datetime.now(datetime.UTC),
+                conversion_version=getattr(self.app_config, "agent_version", None) or "0.1.0",
+                semantic_score=0.85,  # Placeholder
+                validation_result=ValidationResult(
+                    is_valid=not any(
+                        i.severity == ValidationSeverity.ERROR for i in validation_issues
+                    ),
+                    issues=validation_issues,
+                    schema_hash="placeholder_hash",
+                ),
+                field_mappings={},  # Placeholder for field name mappings
             )
 
 

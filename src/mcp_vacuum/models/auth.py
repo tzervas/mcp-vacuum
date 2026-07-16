@@ -1,7 +1,10 @@
+import base64
+import hashlib
 import time
 from enum import Enum
+from typing import Any
 
-from pydantic import Field, HttpUrl
+from pydantic import Field, HttpUrl, model_validator
 
 from .common import BasePydanticModel
 
@@ -13,9 +16,43 @@ class AuthMethod(str, Enum):
 
 
 class PKCEChallenge(BasePydanticModel):
-    code_verifier: str = Field(..., min_length=43, max_length=128)
-    code_challenge: str = Field(..., min_length=43, max_length=128)
+    # RFC 7636: unreserved characters only [A-Za-z0-9-._~], length 43–128
+    code_verifier: str = Field(
+        ...,
+        min_length=43,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9\-._~]+$",
+        description="PKCE code_verifier (RFC 7636 unreserved charset)",
+    )
+    code_challenge: str | None = Field(
+        default=None,
+        min_length=43,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9\-._~]+$",
+        description="PKCE code_challenge (RFC 7636 unreserved charset); computed if omitted",
+    )
     code_challenge_method: str = Field(default="S256")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _compute_challenge_if_missing(cls, data: Any) -> Any:
+        """Derive code_challenge from code_verifier when not provided."""
+        if not isinstance(data, dict):
+            return data
+        verifier = data.get("code_verifier")
+        challenge = data.get("code_challenge")
+        method = data.get("code_challenge_method", "S256") or "S256"
+        if verifier and not challenge:
+            if method == "S256":
+                digest = hashlib.sha256(verifier.encode("ascii")).digest()
+                data["code_challenge"] = (
+                    base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+                )
+            elif method == "plain":
+                data["code_challenge"] = verifier
+            else:
+                raise ValueError(f"Unsupported code_challenge_method: {method}")
+        return data
 
 class OAuth2Token(BasePydanticModel):
     access_token: str

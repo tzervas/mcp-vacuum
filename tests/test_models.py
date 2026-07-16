@@ -69,11 +69,14 @@ def test_oauth2token_is_expired() -> None:
 
 
 def test_pkce_challenge_validation() -> None:
-    """Test PKCEChallenge model validation (though it's mostly for data holding)."""
-    pkce = PKCEChallenge(code_verifier="v", code_challenge="c", code_challenge_method="S256")
-    assert pkce.code_verifier == "v" # Pydantic performs basic assignment checks
-    with pytest.raises(ValidationError): # min_length validation
-        PKCEChallenge(code_verifier="short", code_challenge="c", code_challenge_method="S256")
+    """Test PKCEChallenge model validation (RFC 7636 length + charset)."""
+    verifier = "A" * 43
+    pkce = PKCEChallenge(code_verifier=verifier, code_challenge_method="S256")
+    assert pkce.code_verifier == verifier
+    assert pkce.code_challenge is not None
+    assert len(pkce.code_challenge) >= 43
+    with pytest.raises(ValidationError):  # min_length validation
+        PKCEChallenge(code_verifier="short", code_challenge="c" * 43, code_challenge_method="S256")
 
 
 # --- MCP Models Tests ---
@@ -117,7 +120,7 @@ def test_kagent_tool_creation() -> None:
 
     assert ktool.metadata.name == "my-kagent-tool"
     assert ktool.spec.parameters.properties["x"]["type"] == "integer"
-    assert ktool.api_version == "tools.kagent.ai/v1" # Default value
+    assert ktool.apiVersion == "kagent.ai/v1alpha1"  # Default value
 
 def test_kagent_crd_schema_extra_fields() -> None:
     """Test KagentCRDSchema allows extra fields (as JSON schema can be flexible)."""

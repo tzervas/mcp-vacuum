@@ -60,8 +60,8 @@ class AuthConfig(BaseModel): # Remains BaseModel
     preconfigured_credentials_file: Path | None = Field(None, description="Path to pre-configured credentials file.")
     token_storage_method: str = Field(
         default="keyring",
-        pattern="^keyring$",  # Only allow keyring for now until file storage is implemented
-        description="Method for storing tokens (currently only 'keyring' is supported).")
+        pattern="^(keyring|file)$",
+        description="Method for storing tokens ('keyring' or 'file').")
     keyring_service_name: str = Field(default="mcp_vacuum_tokens", description="Service name for keyring storage.")
     encrypted_token_file_path: Path | None = Field(None, description="Path for encrypted token file.")
 

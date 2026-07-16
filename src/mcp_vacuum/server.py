@@ -84,11 +84,36 @@ class MCPServer(BaseModel):
     @classmethod
     def validate_endpoint(cls, v):
         """Validate endpoint URL format and scheme."""
-        parsed = urlparse(v)
-        if parsed.scheme.lower() not in ["http", "https"]:
-            msg = f"Invalid URL scheme '{parsed.scheme}'. Must be HTTP or HTTPS."
+        if not v or not isinstance(v, str):
+            msg = "Invalid URL format"
             logger.warning(msg, url=v)
             raise ValueError(msg)
+
+        parsed = urlparse(v)
+        if not parsed.scheme or not parsed.netloc:
+            # Missing scheme (e.g. localhost:8080) or host (http://)
+            msg = "Invalid URL format"
+            logger.warning(msg, url=v)
+            raise ValueError(msg)
+
+        scheme = parsed.scheme.lower()
+        if scheme not in ("http", "https"):
+            msg = f"Invalid URL protocol '{parsed.scheme}'. Must be HTTP or HTTPS."
+            logger.warning(msg, url=v)
+            raise ValueError(msg)
+
+        # Reject URLs with fragments
+        if parsed.fragment:
+            msg = "URL fragments not allowed"
+            logger.warning(msg, url=v)
+            raise ValueError(msg)
+
+        # Port range check when explicitly present
+        if parsed.port is not None and not (1 <= parsed.port <= 65535):
+            msg = "Invalid port number"
+            logger.warning(msg, url=v)
+            raise ValueError(msg)
+
         return v
 
     @property
@@ -117,7 +142,11 @@ class MCPServer(BaseModel):
     @property
     def is_authenticated(self) -> bool:
         """Check if server is authenticated."""
-        return self.status == ServerStatus.AUTHENTICATED
+        # use_enum_values=True stores status as the enum value string
+        return self.status in (
+            ServerStatus.AUTHENTICATED,
+            ServerStatus.AUTHENTICATED.value,
+        )
 
     def update_status(self, status: ServerStatus) -> None:
         """Update server status."""
