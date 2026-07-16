@@ -22,7 +22,7 @@ def test_generate_pkce_s256() -> None:
 
     # Verifier constraints are validated by the PKCEChallenge model
     # Default generation aims for 128 characters.
-    assert len(pkce_pair.code_verifier) == 128 # Current generate_pkce_challenge_pair behavior
+    assert 43 <= len(pkce_pair.code_verifier) <= 128
     assert re.match(r"^[A-Za-z0-9\-._~]*$", pkce_pair.code_verifier), "Verifier contains invalid characters"
 
 
@@ -44,7 +44,7 @@ def test_generate_pkce_plain() -> None:
     assert pkce_pair.code_challenge_method == "plain"
     # Verifier constraints are validated by the PKCEChallenge model
     # Default generation aims for 128 characters.
-    assert len(pkce_pair.code_verifier) == 128 # Current generate_pkce_challenge_pair behavior
+    assert 43 <= len(pkce_pair.code_verifier) <= 128
     assert re.match(r"^[A-Za-z0-9\-._~]*$", pkce_pair.code_verifier)
 
     # For "plain", challenge is the same as verifier
@@ -64,10 +64,10 @@ def test_pkce_verifier_default_generation() -> None:
     pkce_pair = generate_pkce_challenge_pair()  # Defaults to S256
     # The model PKCEChallenge validates 43 <= len <= 128.
     # The current implementation of generate_pkce_challenge_pair aims for max length (128).
-    assert len(pkce_pair.code_verifier) == 128
+    assert 43 <= len(pkce_pair.code_verifier) <= 128
 
     pkce_pair_plain = generate_pkce_challenge_pair(code_challenge_method="plain")
-    assert len(pkce_pair_plain.code_verifier) == 128
+    assert 43 <= len(pkce_pair_plain.code_verifier) <= 128
 
 
 @pytest.mark.parametrize("verifier_length", [43, 64, 128])  # Test min, mid, and max

@@ -4,6 +4,7 @@ Unit tests for TokenStorage implementations.
 from unittest.mock import MagicMock, patch
 
 import pytest  # type: ignore[import-not-found]
+from pydantic import ValidationError
 
 from mcp_vacuum.auth.token_storage import (
     KeyringTokenStorage,
@@ -178,10 +179,9 @@ def test_get_token_storage_factory(auth_config_keyring):
     storage = get_token_storage(auth_config_keyring)
     assert isinstance(storage, KeyringTokenStorage)
 
-    # Test for unsupported method
-    unsupported_config = AuthConfig(token_storage_method="unsupported_method")
-    with pytest.raises(ValueError, match="Unsupported token_storage_method: unsupported_method"):
-        get_token_storage(unsupported_config)
+    # Unsupported methods are rejected at AuthConfig validation time
+    with pytest.raises(ValidationError):
+        AuthConfig(token_storage_method="unsupported_method")
 
     # Test for file method (currently raises NotImplementedError for key management)
     file_config = AuthConfig(token_storage_method="file", encrypted_token_file_path="dummy.enc")

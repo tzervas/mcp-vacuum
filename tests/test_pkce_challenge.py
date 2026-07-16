@@ -39,7 +39,7 @@ class TestPKCEChallengeValidation:
             id="max-length"
         ),
         pytest.param("abc-def_ghi.jkl~mno" + "p" * 24, id="special-chars-mix"),
-        pytest.param("test-verifier_with.valid~chars" + "0" * 12, id="realistic-example")
+        pytest.param("test-verifier_with.valid~chars" + "0" * 13, id="realistic-example")
     ])
     def test_valid_code_verifier_characters(self, verifier, valid_challenge):
         """Test that valid code verifier characters are accepted."""
@@ -152,7 +152,7 @@ class TestPKCEChallengeValidation:
         pytest.param("a" * 43, id="lowercase-min"),
         pytest.param("0" * 43, id="numbers-min"),
         pytest.param("A-_" * 14 + "A", id="base64url-chars"),
-        pytest.param("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm" + "0-_", id="mixed-chars")
+        pytest.param("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm" + "0-_A", id="mixed-chars")
     ])
     def test_valid_code_challenge_characters(self, challenge, valid_verifier):
         """Test that code challenge validation doesn't produce false positives."""
