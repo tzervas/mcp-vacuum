@@ -1,5 +1,10 @@
 # MCP Vacuum
 
+<!-- FLEET-BADGES:BEGIN -->
+[![CI](https://github.com/tzervas/mcp-vacuum/actions/workflows/fleet-ci.yml/badge.svg?branch=main)](https://github.com/tzervas/mcp-vacuum/actions/workflows/fleet-ci.yml?query=branch%3Amain)
+[![Security](https://github.com/tzervas/mcp-vacuum/actions/workflows/fleet-security.yml/badge.svg?branch=main)](https://github.com/tzervas/mcp-vacuum/actions/workflows/fleet-security.yml?query=branch%3Amain)
+<!-- FLEET-BADGES:END -->
+
 MCP Vacuum is an AI agent developed in Python 3.12, designed to automatically discover MCP (Model Context Protocol) servers, manage authentication (including OAuth 2.1 with PKCE), and convert their tool schemas into Kagent-compliant formats. It is built using an architecture inspired by the Google Python Agent Developer Kit (ADK) principles, featuring a hierarchical system of specialized agents.
 
 ## Overview
